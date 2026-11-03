@@ -1,0 +1,25 @@
+{% extends "fastapi_panel/base.html" %}
+{% block content %}
+<h1 class="page-title">{{ title }}</h1>
+<div class="card card-padded">
+  <p>This can't be undone. These will be deleted:</p>
+  <ul class="delete-list">
+    {% for label in labels %}<li>{{ label }}</li>{% endfor %}
+    {% if extra_count %}<li class="muted">and {{ extra_count }} more</li>{% endif %}
+  </ul>
+  {% if related %}
+  <p>Along with their related records:</p>
+  <ul class="delete-list">
+    {% for entry in related %}
+    <li><strong>{{ entry.name }}</strong> ({{ entry.count }}): {{ entry["items"]|join(", ") }}{% if entry.count > entry["items"]|length %}, &hellip;{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <form method="post" action="{{ post_url }}" class="submit-row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% for name, value in hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+    <button class="button button-danger" type="submit">Yes, delete</button>
+    <a class="button" href="{{ cancel_url }}">Cancel</a>
+  </form>
+</div>
+{% endblock %}

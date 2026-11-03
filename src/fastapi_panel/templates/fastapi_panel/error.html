@@ -1,0 +1,10 @@
+{% extends "fastapi_panel/base.html" %}
+{% block body %}
+<main class="login">
+  <div class="login-card">
+    <h1>{{ status }}</h1>
+    <p>{{ detail }}</p>
+    <a class="button" href="{{ root }}/">Back to the dashboard</a>
+  </div>
+</main>
+{% endblock %}

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="data:,">
+  <title>{{ title }} | {{ site.title }}</title>
+  <script src="{{ static }}/theme.js?v={{ version }}"></script>
+  <link rel="stylesheet" href="{{ static }}/panel.css?v={{ version }}">
+  {% for href in site.extra_css %}<link rel="stylesheet" href="{{ href }}">{% endfor %}
+  <script src="{{ static }}/panel.js?v={{ version }}" defer></script>
+</head>
+<body>
+{% block body %}
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-inner">
+    <a class="brand" href="{{ root }}/">{{ site.header }}</a>
+    <input class="nav-search" type="search" placeholder="Find a model" aria-label="Find a model" data-nav-filter>
+    <nav aria-label="Models">
+      {% for group in nav %}
+      <div class="nav-group" data-nav-group>
+        <p class="nav-title">{{ group.name }}</p>
+        <ul>
+          {% for item in group["items"] %}
+          <li class="nav-item{% if item.active %} active{% endif %}" data-nav-item>
+            <a href="{{ item.url }}"{% if item.active %} aria-current="page"{% endif %}>{{ item.label }}</a>
+            {% if item.add_url %}<a class="nav-add" href="{{ item.add_url }}" aria-label="Add to {{ item.label }}" title="Add">+</a>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endfor %}
+    </nav>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-button menu-button" type="button" data-toggle-sidebar aria-controls="sidebar" aria-label="Toggle menu">&#9776;</button>
+      {% if crumbs %}
+      <nav class="crumbs" aria-label="Breadcrumb">
+        {% for label, url in crumbs %}
+          {% if url %}<a href="{{ url }}">{{ label }}</a><span aria-hidden="true">/</span>{% else %}<span aria-current="page">{{ label }}</span>{% endif %}
+        {% endfor %}
+      </nav>
+      {% else %}<span class="crumbs"></span>{% endif %}
+      <div class="topbar-end">
+        <button class="icon-button" type="button" data-toggle-theme aria-label="Switch color theme" title="Switch color theme">&#9680;</button>
+        {% if user is not none %}
+        <span class="user-name">{{ user_label }}</span>
+        {% if can_change_password %}<a class="top-link" href="{{ root }}/password">Password</a>{% endif %}
+        <form method="post" action="{{ root }}/logout">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="top-link" type="submit">Log out</button>
+        </form>
+        {% endif %}
+      </div>
+    </header>
+
+    <main class="content">
+      {% for message in messages %}
+      <div class="message message-{{ message.level }}" role="status">{{ message.text }}</div>
+      {% endfor %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% endblock %}
+</body>
+</html>

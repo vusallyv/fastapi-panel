@@ -1,0 +1,107 @@
+{% extends "fastapi_panel/base.html" %}
+{% from "fastapi_panel/widgets.html" import widget, errors, form_row %}
+
+{% macro submit_row(top=False) %}
+{% if can_save %}
+<div class="submit-row{% if top %} submit-row-top{% endif %}">
+  <button class="button button-primary" type="submit" name="_save" value="1">Save</button>
+  <button class="button" type="submit" name="_continue" value="1">Save and continue editing</button>
+  {% if can_add %}<button class="button" type="submit" name="_addanother" value="1">Save and add another</button>{% endif %}
+  {% if save_as %}<button class="button" type="submit" name="_saveasnew" value="1">Save as new</button>{% endif %}
+  {% if can_delete %}<a class="button button-danger push-end" href="{{ delete_url }}">Delete</a>{% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro inline_hidden(row) %}
+<input type="hidden" name="{{ row.prefix }}_pk" value="{{ row.pk }}">
+{% endmacro %}
+
+{% macro tabular_row(formset, row, template=False) %}
+<tr {% if template %}data-inline-template{% else %}data-inline-row{% endif %}>
+  {% for field in row.form.fields %}
+  <td>{{ widget(field) }}{{ errors(field) }}</td>
+  {% endfor %}
+  <td class="col-delete">
+    {{ inline_hidden(row) }}
+    {% if row.persisted and formset.can_delete %}
+    <label class="delete-toggle"><input type="checkbox" name="{{ row.prefix }}DELETE"{% if row.delete %} checked{% endif %}> Delete</label>
+    {% elif not row.persisted and not formset.view_only %}
+    <button class="link-button" type="button" data-inline-remove aria-label="Remove row">&times;</button>
+    {% endif %}
+  </td>
+</tr>
+{% endmacro %}
+
+{% macro stacked_row(formset, row, template=False) %}
+<div class="stacked-row" {% if template %}data-inline-template{% else %}data-inline-row{% endif %}>
+  <div class="stacked-head">
+    <strong>{{ row.label or ("New " ~ formset.inline.name.lower()) }}</strong>
+    {% if row.persisted and formset.can_delete %}
+    <label class="delete-toggle"><input type="checkbox" name="{{ row.prefix }}DELETE"{% if row.delete %} checked{% endif %}> Delete</label>
+    {% elif not row.persisted and not formset.view_only %}
+    <button class="link-button" type="button" data-inline-remove>Remove</button>
+    {% endif %}
+  </div>
+  {{ inline_hidden(row) }}
+  {% for field in row.form.fields %}{{ form_row(field) }}{% endfor %}
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <h1 class="page-title">{{ title }}</h1>
+  <div class="page-links">
+    {% if history_url %}<a class="button" href="{{ history_url }}">History</a>{% endif %}
+    {% if view_on_site %}<a class="button" href="{{ view_on_site }}" rel="noopener noreferrer" target="_blank">View on site</a>{% endif %}
+  </div>
+</div>
+
+<form method="post" action="{{ post_url }}" novalidate data-change-form>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {% if save_on_top %}{{ submit_row(top=True) }}{% endif %}
+
+  {% for error in form.errors %}<div class="message message-error" role="alert">{{ error }}</div>{% endfor %}
+
+  {% for fieldset in form.fieldsets %}
+    {% if fieldset.collapsed %}<details class="card fieldset"><summary class="card-title">{{ fieldset.title or "More" }}</summary>
+    {% else %}<fieldset class="card fieldset">{% if fieldset.title %}<legend class="card-title">{{ fieldset.title }}</legend>{% endif %}{% endif %}
+      {% if fieldset.description %}<p class="help fieldset-description">{{ fieldset.description }}</p>{% endif %}
+      {% for row in fieldset.rows %}
+      <div class="form-row{% if row|length > 1 %} form-row-split{% endif %}">
+        {% for field in row %}{{ form_row(field) }}{% endfor %}
+      </div>
+      {% endfor %}
+    {% if fieldset.collapsed %}</details>{% else %}</fieldset>{% endif %}
+  {% endfor %}
+
+  {% for formset in formsets %}
+  <section class="card inline" data-inline="{{ formset.prefix }}" data-next-index="{{ formset.rows|length }}">
+    <h2 class="card-title">{{ formset.inline.name_plural }}</h2>
+    {% for error in formset.errors %}<div class="message message-error" role="alert">{{ error }}</div>{% endfor %}
+    <input type="hidden" name="{{ formset.prefix }}-TOTAL" value="{{ formset.rows|length }}" data-inline-total>
+    {% if formset.inline.template == "tabular" %}
+    <div class="table-wrap">
+      <table class="table table-inline">
+        <thead><tr>{% for label in formset.labels %}<th scope="col">{{ label }}</th>{% endfor %}<th></th></tr></thead>
+        <tbody data-inline-rows>
+          {% for row in formset.rows %}{{ tabular_row(formset, row) }}{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if formset.blank %}<template data-inline-blank><table><tbody>{{ tabular_row(formset, formset.blank, True) }}</tbody></table></template>{% endif %}
+    {% else %}
+    <div data-inline-rows>
+      {% for row in formset.rows %}{{ stacked_row(formset, row) }}{% endfor %}
+    </div>
+    {% if formset.blank %}<template data-inline-blank>{{ stacked_row(formset, formset.blank, True) }}</template>{% endif %}
+    {% endif %}
+    {% if formset.blank and formset.inline.has_add_permission(request) %}
+    <button class="link-button inline-add" type="button" data-inline-add>+ Add another {{ formset.inline.name.lower() }}</button>
+    {% endif %}
+  </section>
+  {% endfor %}
+
+  {{ submit_row() }}
+</form>
+{% endblock %}

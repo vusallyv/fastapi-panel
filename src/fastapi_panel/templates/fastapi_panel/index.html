@@ -1,0 +1,43 @@
+{% extends "fastapi_panel/base.html" %}
+{% block content %}
+<h1 class="page-title">{{ title }}</h1>
+<div class="dashboard">
+  <div class="dashboard-groups">
+    {% for group in nav %}
+    <section class="card">
+      <h2 class="card-title">{{ group.name }}</h2>
+      <table class="table">
+        <tbody>
+          {% for item in group["items"] %}
+          <tr>
+            <th scope="row"><a href="{{ item.url }}">{{ item.label }}</a></th>
+            <td class="align-end">{% if item.add_url %}<a class="row-link" href="{{ item.add_url }}">+ Add</a>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% else %}
+    <p class="muted">You don't have access to anything yet.</p>
+    {% endfor %}
+  </div>
+  {% if site.audit_log %}
+  <section class="card recent">
+    <h2 class="card-title">Your recent actions</h2>
+    {% if recent %}
+    <ul class="activity">
+      {% for entry in recent %}
+      <li>
+        <span class="tag tag-{{ entry.action }}">{{ entry.action }}</span>
+        {% if entry.action != "delete" and entry.model in registry %}
+        <a href="{{ root }}/{{ entry.model }}/{{ entry.object_id|urlencode|replace('/', '%2F') }}/change">{{ entry.object_label }}</a>
+        {% else %}<span>{{ entry.object_label }}</span>{% endif %}
+        <small class="muted">{{ entry.model }} &middot; {{ entry.created_at.strftime("%Y-%m-%d %H:%M") }} UTC</small>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted card-empty">Nothing yet.</p>{% endif %}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,52 @@
+{% macro attrs(field) %}{% for key, value in field.attrs.items() %} {{ key }}="{{ value }}"{% endfor %}{% endmacro %}
+
+{% macro widget(field) %}
+{% set describedby = field.html_name ~ "-help" if field.help_text else "" %}
+{% if field.widget == "readonly" %}
+  <div class="readonly">{{ field.display }}</div>
+{% elif field.widget == "textarea" %}
+  <textarea id="id_{{ field.html_name }}" name="{{ field.html_name }}" rows="6"{% if field.required %} required{% endif %}{% if describedby %} aria-describedby="{{ describedby }}"{% endif %}{{ attrs(field) }}>{{ field.value }}</textarea>
+{% elif field.widget == "checkbox" %}
+  <input id="id_{{ field.html_name }}" name="{{ field.html_name }}" type="checkbox"{% if field.value %} checked{% endif %}{{ attrs(field) }}>
+{% elif field.widget == "select" %}
+  <select id="id_{{ field.html_name }}" name="{{ field.html_name }}"{% if field.required %} required{% endif %}{{ attrs(field) }}>
+    <option value=""{% if not field.value %} selected{% endif %}>---------</option>
+    {% for value, label in field.choices %}
+    <option value="{{ value }}"{% if value == field.value %} selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+{% elif field.widget in ("multiselect", "dual") %}
+  <select id="id_{{ field.html_name }}" name="{{ field.html_name }}" multiple size="8"{% if field.widget == "dual" %} data-dual{% endif %}{{ attrs(field) }}>
+    {% for value, label in field.choices %}
+    <option value="{{ value }}"{% if value in field.value %} selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+{% elif field.widget == "autocomplete" %}
+  <div class="autocomplete" data-autocomplete="{{ field.autocomplete_url }}" data-name="{{ field.html_name }}"{% if field.value is sequence and field.value is not string %} data-multiple{% endif %}>
+    <div class="autocomplete-chips" data-chips>
+      {% for value, label in field.selected %}
+      <span class="chip" data-chip><input type="hidden" name="{{ field.html_name }}" value="{{ value }}">{{ label }}<button type="button" data-remove aria-label="Remove {{ label }}">&times;</button></span>
+      {% endfor %}
+    </div>
+    <input id="id_{{ field.html_name }}" type="search" placeholder="Type to search" autocomplete="off" aria-label="Search {{ field.label }}" data-search>
+    <ul class="autocomplete-results" data-results hidden></ul>
+  </div>
+{% else %}
+  <input id="id_{{ field.html_name }}" name="{{ field.html_name }}" type="{{ field.input_type }}" value="{{ field.value }}"{% if field.required %} required{% endif %}{% if describedby %} aria-describedby="{{ describedby }}"{% endif %}{{ attrs(field) }}>
+{% endif %}
+{% endmacro %}
+
+{% macro errors(field) %}
+{% for error in field.errors %}<p class="field-error" role="alert">{{ error }}</p>{% endfor %}
+{% endmacro %}
+
+{% macro form_row(field) %}
+<div class="field{% if field.errors %} has-error{% endif %}{% if field.widget == 'checkbox' %} field-check{% endif %}">
+  <label for="id_{{ field.html_name }}"{% if field.required %} class="required"{% endif %}>{{ field.label }}</label>
+  <div class="field-input">
+    {{ widget(field) }}
+    {{ errors(field) }}
+    {% if field.help_text %}<p class="help" id="{{ field.html_name }}-help">{{ field.help_text }}</p>{% endif %}
+  </div>
+</div>
+{% endmacro %}

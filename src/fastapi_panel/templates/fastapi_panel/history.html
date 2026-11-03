@@ -1,0 +1,23 @@
+{% extends "fastapi_panel/base.html" %}
+{% block content %}
+<h1 class="page-title">{{ title }}</h1>
+<div class="card">
+  {% if entries %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th scope="col">When (UTC)</th><th scope="col">User</th><th scope="col">Action</th><th scope="col">Details</th></tr></thead>
+      <tbody>
+        {% for entry in entries %}
+        <tr>
+          <td>{{ entry.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+          <td>{{ entry.user_label }}</td>
+          <td><span class="tag tag-{{ entry.action }}">{{ entry.action }}</span></td>
+          <td>{{ entry.message or "-" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="muted card-empty">No changes were recorded through the panel.</p>{% endif %}
+</div>
+{% endblock %}

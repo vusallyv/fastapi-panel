@@ -1,0 +1,124 @@
+{% extends "fastapi_panel/base.html" %}
+{% from "fastapi_panel/widgets.html" import widget, errors %}
+{% block content %}
+<div class="page-head">
+  <h1 class="page-title">{{ title }}</h1>
+  {% if can_add %}<a class="button button-primary" href="{{ add_url }}">+ Add {{ admin.name.lower() }}</a>{% endif %}
+</div>
+
+<div class="changelist{% if filters %} has-filters{% endif %}">
+  <div class="changelist-main">
+    {% if admin.search_fields %}
+    <form class="search" method="get" role="search">
+      <input type="search" name="q" value="{{ query }}" placeholder="Search {{ title.lower() }}" aria-label="Search {{ title.lower() }}">
+      {% for name, value in hidden_params %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+      <button class="button" type="submit">Search</button>
+      {% if query %}<span class="muted">{{ total }} result{{ "" if total == 1 else "s" }} (<a href="{{ clear_filters_url }}">of {{ grand_total }} total</a>)</span>{% endif %}
+    </form>
+    {% if admin.search_help_text %}<p class="help">{{ admin.search_help_text }}</p>{% endif %}
+    {% endif %}
+
+    {% if date_links %}
+    <nav class="date-drill" aria-label="Filter by date">
+      {% if date_links.crumbs %}<a href="{{ date_links.clear }}">&lsaquo; All dates</a>{% endif %}
+      {% for crumb in date_links.crumbs %}<a class="current" href="{{ crumb.url }}">{{ crumb.label }}</a>{% endfor %}
+      {% for link in date_links.links %}<a href="{{ link.url }}">{{ link.label }}</a>{% endfor %}
+    </nav>
+    {% endif %}
+
+    <form method="post" action="{{ post_url }}" data-changelist>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {% if actions %}
+      <div class="actions-bar">
+        <label class="sr-only" for="action-select">Action</label>
+        <select id="action-select" name="action" data-action-select>
+          <option value="">Choose an action</option>
+          {% for name, info in actions.items() %}
+          <option value="{{ name }}"{% if info.confirm %} data-confirm="{{ info.confirm }}"{% endif %}>{{ info.description }}</option>
+          {% endfor %}
+        </select>
+        <button class="button" type="submit" name="_run_action" value="1">Go</button>
+        <span class="muted" data-counter aria-live="polite">0 of {{ rows|length }} selected</span>
+        {% if total > rows|length %}
+        <button class="link-button" type="button" data-select-across hidden>Select all {{ total }} {{ title.lower() }}</button>
+        <input type="hidden" name="select_across" value="" data-across-input>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <div class="table-wrap">
+        <table class="table table-list">
+          <thead>
+            <tr>
+              {% if actions %}<th class="col-check"><input type="checkbox" data-select-all aria-label="Select all rows on this page"></th>{% endif %}
+              {% for header in headers %}
+              <th scope="col"{% if header.direction %} aria-sort="{{ 'ascending' if header.direction == 'asc' else 'descending' }}" class="sorted"{% endif %}>
+                {% if header.url %}<a href="{{ header.url }}">{{ header.label }}{% if header.direction == "asc" %} <span aria-hidden="true">&#9650;</span>{% elif header.direction == "desc" %} <span aria-hidden="true">&#9660;</span>{% endif %}</a>
+                {% else %}{{ header.label }}{% endif %}
+              </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr>
+              {% if actions %}<td class="col-check"><input type="checkbox" name="_selected" value="{{ row.pk }}" data-row-check aria-label="Select row"></td>{% endif %}
+              {% for cell in row.cells %}
+              <td data-column="{{ cell.name }}">
+                {% if loop.first and editable %}<input type="hidden" name="_row" value="{{ row.pk }}">{% endif %}
+                {% if cell.field %}
+                  {{ widget(cell.field) }}{{ errors(cell.field) }}
+                {% elif cell.link %}
+                  <a class="row-link" href="{{ row.url }}">{{ cell.value }}</a>
+                {% else %}{{ cell.value }}{% endif %}
+              </td>
+              {% endfor %}
+            </tr>
+            {% else %}
+            <tr><td class="empty" colspan="{{ headers|length + 1 }}">
+              {% if query or any_filter_active %}Nothing matches. <a href="{{ clear_filters_url }}">Clear the search and filters</a>.
+              {% else %}No {{ title.lower() }} yet.{% endif %}
+            </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-foot">
+        <span class="muted">{{ total }} {{ admin.name.lower() if total == 1 else title.lower() }}</span>
+        {% if editable and rows %}<button class="button button-primary" type="submit" name="_save_list" value="1">Save changes</button>{% endif %}
+        {% if last_page > 1 %}
+        <nav class="pagination" aria-label="Pages">
+          {% if prev_url %}<a href="{{ prev_url }}" rel="prev" aria-label="Previous page">&lsaquo;</a>{% endif %}
+          {% for item in pages %}
+            {% if item.number is none %}<span class="gap">&hellip;</span>
+            {% elif item.current %}<span class="current" aria-current="page">{{ item.number }}</span>
+            {% else %}<a href="{{ item.url }}">{{ item.number }}</a>{% endif %}
+          {% endfor %}
+          {% if next_url %}<a href="{{ next_url }}" rel="next" aria-label="Next page">&rsaquo;</a>{% endif %}
+        </nav>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  {% if filters %}
+  <aside class="filters" aria-label="Filters">
+    <div class="filters-head">
+      <h2>Filter</h2>
+      {% if any_filter_active %}<a href="{{ clear_filters_url }}">Clear</a>{% endif %}
+    </div>
+    {% for filter in filters %}
+    <details class="filter"{% if filter.active %} data-active{% endif %} {% if filter.active or loop.index <= 4 %}open{% endif %}>
+      <summary>{{ filter.title }}</summary>
+      <ul>
+        {% for option in filter.options %}
+        <li{% if option.selected %} class="selected"{% endif %}><a href="{{ option.url }}"{% if option.selected %} aria-current="true"{% endif %}>{{ option.label }}</a></li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endfor %}
+  </aside>
+  {% endif %}
+</div>
+{% endblock %}
