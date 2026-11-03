@@ -1,0 +1,28 @@
+name: Bug report
+description: Something doesn't work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: For security issues, please use a [private advisory](https://github.com/zaman-labs/fastapi-panel/security/advisories/new) instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: A small model and ModelAdmin help the most.
+      render: python
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: fastapi-panel 0.1.0, SQLAlchemy 2.0, FastAPI 0.115, Python 3.12, PostgreSQL 16
+    validations:
+      required: true
