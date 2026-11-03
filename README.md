@@ -1,0 +1,127 @@
+<h1 align="center">FastAPI Panel</h1>
+
+<p align="center">
+  <strong>The Django admin experience for FastAPI.</strong><br>
+  Register a SQLAlchemy model, get a secure back office.
+</p>
+
+<p align="center">
+  <a href="https://github.com/zaman-labs/fastapi-panel/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/zaman-labs/fastapi-panel/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://pypi.org/project/fastapi-panel/"><img alt="PyPI" src="https://img.shields.io/pypi/v/fastapi-panel"></a>
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-blue">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-green"></a>
+</p>
+
+![The product list, with search, filters, bulk actions and inline editing](docs/screenshots/changelist.png)
+
+If you know `ModelAdmin`, you already know this library: `list_display`, `search_fields`, `list_filter`, `fieldsets`, `inlines`, actions and the rest work the way you expect. There is no frontend build, no Node and no extra service. It's server-rendered pages inside your FastAPI app.
+
+## Install
+
+```bash
+pip install fastapi-panel
+```
+
+## Quick start
+
+```python
+from fastapi import FastAPI
+from fastapi_panel import ModelAdmin, ModelAuth, register, site
+from sqlalchemy.ext.asyncio import create_async_engine
+
+from myapp.models import Product, User
+
+engine = create_async_engine("postgresql+asyncpg://...")
+app = FastAPI()
+
+
+@register(Product)
+class ProductAdmin(ModelAdmin):
+    list_display = ("name", "category", "price", "is_published")
+    list_filter = ("is_published", "category")
+    search_fields = ("name", "category__name")
+    ordering = ("-created_at",)
+
+
+site.mount(
+    app,
+    engine=engine,
+    auth=ModelAuth(User, superuser_field="is_superuser"),
+    secret_key=settings.PANEL_SECRET_KEY,
+)
+```
+
+Open `/admin`, log in, and you have a list page, add and edit forms, delete confirmation, bulk actions, CSV export and a change history. See the [getting started guide](docs/getting-started.md) for creating your first user and setting up migrations.
+
+Want to try it first? The [example shop](examples/shop) runs in one command.
+
+## What you get
+
+| | |
+|---|---|
+| **Change lists** | Columns, computed columns, sorting, search across relations, sidebar filters, date drill-down, pagination, editing in the list |
+| **Forms** | Built from your models, with fieldsets, read-only fields, prefilled slugs, validation hooks, Pydantic schemas, foreign key autocomplete, many-to-many pickers |
+| **Inlines** | Tabular and stacked, with add, edit and delete on the parent's page |
+| **Actions** | Your own bulk actions, plus delete with a summary of what cascades, CSV export and "select all across pages" |
+| **Permissions** | Per model and per action, row-level through `get_queryset` and `has_*_permission` |
+| **Audit log** | Who changed which fields and when, shown on each record's history page |
+| **Any SQLAlchemy setup** | Sync and async engines, SQLModel, composite primary keys |
+| **Interface** | Dark mode, works on a phone, keyboard friendly, no external assets |
+
+<table>
+  <tr>
+    <td><img alt="An order with its items edited inline" src="docs/screenshots/order-inline.png"></td>
+    <td><img alt="A product form with fieldsets and a many-to-many picker" src="docs/screenshots/product-form.png"></td>
+  </tr>
+  <tr>
+    <td><img alt="The dashboard with recent actions" src="docs/screenshots/dashboard.png"></td>
+    <td><img alt="The product list in dark mode" src="docs/screenshots/changelist-dark.png"></td>
+  </tr>
+</table>
+
+## Security
+
+An admin panel can reach all your data, so these are on by default and have no off switch to forget:
+
+- CSRF tokens and `Origin` checks on every POST
+- Signed `HttpOnly`, `SameSite=Lax` session cookies, `Secure` on HTTPS, ended by a password change or by deactivating the user
+- Login throttling, no way to tell a wrong username from a wrong password, scrypt password hashing
+- A strict Content-Security-Policy with no inline scripts or styles, `X-Frame-Options: DENY`, `no-store` caching
+- Columns named like `password`, `token` or `secret` stay hidden unless you ask for them, and the audit log stores field names, never values
+- Only fields on the form can be written, and sort and filter parameters are allowlisted
+- Spreadsheet formulas are neutralised in CSV exports
+
+The panel refuses to start without authentication or with a short secret key. Read [the security guide](docs/security.md) for what's left to you.
+
+## Coming from Django
+
+```python
+# Django                                 # FastAPI Panel
+admin.site.register(Product)             site.register(Product)
+@admin.register(Product)                 @register(Product)
+class ProductAdmin(admin.ModelAdmin):    class ProductAdmin(ModelAdmin):
+    list_display = ("name", "price")         list_display = ("name", "price")
+
+@admin.display(description="Total")      @display("Total")
+@admin.action(description="Publish")     @action("Publish")
+def publish(self, request, queryset):    def publish(self, session, request, objects):
+```
+
+The [comparison page](docs/django-comparison.md) lists every option and what differs.
+
+## Documentation
+
+- [Getting started](docs/getting-started.md)
+- [ModelAdmin reference](docs/model-admin.md): lists, forms, inlines, actions, filters
+- [Authentication and permissions](docs/auth-and-permissions.md)
+- [Modular projects and customizing](docs/customizing.md): autodiscovery, multiple sites, custom pages, templates, themes
+- [Security](docs/security.md)
+- [Coming from Django](docs/django-comparison.md)
+
+## Roadmap
+
+File and image fields, per-site timezones, translations, a saved-filters UI, and a Redis option for login throttling across workers. Ideas and pull requests are welcome, see [CONTRIBUTING](CONTRIBUTING.md).
+
+## License
+
+[MIT](LICENSE)
