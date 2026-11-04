@@ -3,6 +3,9 @@
   --accent-hover: #0a5a4a;
   --accent-soft: #e4f3ef;
   --on-accent: #ffffff;
+  --nav-head: var(--accent);
+  --nav-head-hover: var(--accent-hover);
+  --on-nav-head: var(--on-accent);
   --bg: #f5f6f7;
   --surface: #ffffff;
   --surface-alt: #f9fafb;
@@ -25,6 +28,9 @@
   --accent-hover: #5dd2b8;
   --accent-soft: #15332c;
   --on-accent: #06211b;
+  --nav-head: color-mix(in srgb, var(--accent) 45%, var(--surface));
+  --nav-head-hover: color-mix(in srgb, var(--accent) 55%, var(--surface));
+  --on-nav-head: var(--text);
   --bg: #111516;
   --surface: #1a2022;
   --surface-alt: #20282a;
@@ -46,6 +52,9 @@
     --accent-hover: #5dd2b8;
     --accent-soft: #15332c;
     --on-accent: #06211b;
+    --nav-head: color-mix(in srgb, var(--accent) 45%, var(--surface));
+    --nav-head-hover: color-mix(in srgb, var(--accent) 55%, var(--surface));
+    --on-nav-head: var(--text);
     --bg: #111516;
     --surface: #1a2022;
     --surface-alt: #20282a;
@@ -107,7 +116,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 .sidebar .nav-search::placeholder { color: var(--muted); }
 .nav-group { margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .nav-title {
-  padding: 6px 12px; background: var(--accent); color: var(--on-accent);
+  padding: 6px 12px; background: var(--nav-head); color: var(--on-nav-head);
   font-size: 12px; font-weight: 650; letter-spacing: .02em;
   display: flex; align-items: center; justify-content: space-between; cursor: pointer; list-style: none;
 }
@@ -117,8 +126,8 @@ ul { list-style: none; margin: 0; padding: 0; }
   border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: translateY(-1px) rotate(45deg);
 }
 .nav-group:not([open]) > .nav-title::after { transform: rotate(-45deg); }
-.nav-title:hover { background: var(--accent-hover); }
-.nav-title:focus-visible { outline-color: var(--on-accent); outline-offset: -3px; }
+.nav-title:hover { background: var(--nav-head-hover); }
+.nav-title:focus-visible { outline-color: var(--on-nav-head); outline-offset: -3px; }
 .nav-item { display: flex; align-items: center; border-top: 1px solid var(--border); }
 .nav-item a { padding: 7px 12px; color: var(--text); }
 .nav-item > a:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
