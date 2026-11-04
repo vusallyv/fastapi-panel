@@ -25,6 +25,7 @@ from .forms import (
     FileField,
     Form,
     ManyToManyField,
+    PasswordField,
     ReadOnlyField,
     RelationField,
     RichTextField,
@@ -214,6 +215,8 @@ class FormOptions:
                 field.display = (
                     self.cell(obj, name, request) if obj is not None and persisted else self.empty_value_display
                 )
+                if isinstance(source, PasswordField):
+                    field.display = PasswordField.masked
                 value = self.field_value(obj, name) if obj is not None and persisted else None
                 if isinstance(source, RichTextField) and value:
                     field.display = Markup('<div class="rich-content">{}</div>').format(safe_html(value))
@@ -529,10 +532,46 @@ class ModelAdmin(FormOptions):
     def get_fields(self, request: Any, obj: Any = None) -> list[Any]:
         return [name for name in super().get_fields(request, obj) if name != self.soft_delete_field]
 
+    def _password_name(self) -> str | None:
+        """The password column, when this admin edits the users the panel logs in with."""
+        auth = getattr(self.site, "auth", None)
+        if auth is None or getattr(auth, "model", None) is not self.model or not auth.can_change_password:
+            return None
+        name = auth.password_field
+        return None if name in self.exclude or name in self.field_overrides else name
+
+    def _available_fields(self) -> tuple[dict[str, Field], set[str]]:
+        fields, hidden = super()._available_fields()
+        name = self._password_name()
+        if name:
+            fields[name] = PasswordField(label="Password")
+        return fields, hidden
+
     def get_fieldsets(self, request: Any, obj: Any = None) -> list[tuple[str | None, dict[str, Any]]]:
         if self.fieldsets is not None:
-            return list(self.fieldsets)
-        return [(None, {"fields": self.get_fields(request, obj)})]
+            found = list(self.fieldsets)
+        else:
+            found = [(None, {"fields": self.get_fields(request, obj)})]
+        name = self._password_name()
+        if name is None:
+            return found
+        listed = {
+            part
+            for _, options in found
+            for row in options["fields"]
+            for part in (row if isinstance(row, (tuple, list)) else [row])
+        }
+        # The add page passes a new, unsaved object.
+        existing = obj is not None and inspect(obj).persistent
+        may_set = self._may_replace_password(request, obj) if existing else self.has_add_permission(request)
+        if name not in listed and may_set:
+            found.append(("Password", {"fields": (name,)}))
+        return found
+
+    def _may_replace_password(self, request: Any, obj: Any) -> bool:
+        auth = self.site.auth
+        allowed = auth.superuser_field is None or auth.is_superuser(request.state.user)
+        return allowed and self.has_change_permission(request, obj)
 
     def get_inlines(self, request: Any, obj: Any = None) -> list[InlineAdmin]:
         return [inline(self) for inline in self.inlines]

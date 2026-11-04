@@ -36,7 +36,7 @@ from .groups import StaffGroupAdmin
 from .log import AdminLog, SavedFilter, StaffGroup, StaffGroupMember
 from .log import Base as PanelBase
 from .options import ImproperlyConfigured, ModelAdmin
-from .security import SECURITY_HEADERS, BodyTooLarge, LimitBody, LoginThrottle, Signer
+from .security import MIN_PASSWORD_LENGTH, SECURITY_HEADERS, BodyTooLarge, LimitBody, LoginThrottle, Signer
 from .storage import Storage
 
 COOKIE_NAME = "fastapi_panel_session"
@@ -46,7 +46,6 @@ logger = logging.getLogger("fastapi_panel")
 INLINE_FILE_TYPES = {"png", "jpg", "jpeg", "gif", "webp"}
 FILE_CSP = "default-src 'none'; sandbox"
 MIN_SECRET_LENGTH = 32
-MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 4096
 MAX_FORM_FIELDS = 20_000
 

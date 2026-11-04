@@ -22,6 +22,7 @@ from starlette.datastructures import UploadFile
 
 from .introspect import coerce_to_column, humanize, object_label
 from .richtext import plain_text, sanitize_html
+from .security import MIN_PASSWORD_LENGTH
 
 SENSITIVE_NAME = re.compile(r"password|passwd|secret|token|api_?key|private_?key", re.I)
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -447,6 +448,47 @@ class ImageField(FileField):
         upload.file.seek(0)
         if not IMAGE_SIGNATURES.get(_extension(upload.filename or ""), lambda _: False)(head):
             raise ValidationError("This file isn't a valid image.")
+
+
+class PasswordField(Field):
+    """Sets a user's password through the auth backend. The stored hash never reaches the page."""
+
+    input_type = "password"
+    masked = "••••••••"
+
+    def prepare(self, session: Any, request: Any, site: Any) -> None:
+        self.session = session
+        self.auth = site.auth
+        self.can_replace = self.auth.superuser_field is None or self.auth.is_superuser(request.state.user)
+        self.required = True
+        self.attrs = {**self.attrs, "autocomplete": "new-password"}
+
+    def read(self, obj: Any) -> str:
+        # An existing password can log in as that person, so changing it takes a superuser.
+        self.required = False
+        if not self.can_replace:
+            self.widget = "readonly"
+            self.display = self.masked
+        else:
+            self.help_text = self.help_text or "Leave empty to keep the current password. A new one logs this user out."
+        return ""
+
+    def format(self, value: Any) -> str:
+        return self.masked if value else ""
+
+    def clean(self, raw: Any) -> str | None:
+        self.value = ""  # The form re-renders with this, and a password must not come back in the page.
+        if not raw:
+            if self.required:
+                raise ValidationError("This field is required.")
+            return None
+        if len(raw) < MIN_PASSWORD_LENGTH:
+            raise ValidationError(f"Use at least {MIN_PASSWORD_LENGTH} characters.")
+        return raw
+
+    def write(self, obj: Any, value: Any) -> None:
+        if value:
+            self.auth.set_password(self.session, obj, value)
 
 
 class ReadOnlyField(Field):

@@ -50,6 +50,12 @@ Only superusers can see or change groups, even if a user holds the `*` permissio
 
 The grid sets the same permission strings as above, so it has no effect on a `ModelAdmin` whose `has_*_permission` methods ignore them. Groups need `ModelAuth`, and the two tables described in [Migrations](getting-started.md#4-migrations). Without those tables, non-superusers get an error page rather than extra access. Deleting a user through the panel removes their memberships, but deleting one elsewhere doesn't. If your database can reuse user ids, delete the rows in `fastapi_panel_group_member` too.
 
+## Adding staff and setting passwords
+
+When a `ModelAdmin` edits the same model as `ModelAuth`, its form gets a **Password** field that hashes through your backend. It's required when adding a user, and leaving it empty on an existing user keeps their password. The stored hash is never shown.
+
+Only superusers can replace an existing user's password, since that would let someone log in as them. If there's no `superuser_field`, everyone who can edit the user can. Changing a password logs that user out, including you if you change your own here. To leave the field out, add the column to `exclude`.
+
 ## Your own roles
 
 For anything else, subclass the backend. Load what you need in `get_user`, because the database session is closed by the time `has_perm` runs:

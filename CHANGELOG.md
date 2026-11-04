@@ -10,6 +10,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 - `object_actions`: buttons that run custom code on one record, with `get_object_actions` to choose which records get them
 
+### Fixed
+
+- Adding a user from the panel failed because the password column wasn't on the form. Admins for the `ModelAuth` model now get a hashed **Password** field. Only superusers can replace an existing user's password
+
 ### Changed
 
 - The delete page shows a collapsible tree of what will be removed, with counts per model and links to records. It now includes database cascades and many-to-many links

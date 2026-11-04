@@ -8,6 +8,8 @@ import secrets
 import time
 from typing import Any
 
+MIN_PASSWORD_LENGTH = 8
+
 SCRYPT_N = 2**15
 SCRYPT_R = 8
 SCRYPT_P = 1
