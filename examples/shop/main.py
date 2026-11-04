@@ -5,7 +5,7 @@ import random
 from contextlib import asynccontextmanager
 from decimal import Decimal
 
-import admin  # noqa: F401  (registers the models)
+import admin
 from fastapi import FastAPI
 from models import Base, Category, Customer, Order, OrderItem, OrderStatus, Product, Staff, Tag
 from sqlalchemy import select
@@ -114,8 +114,12 @@ app = FastAPI(title="Acme Shop API", lifespan=lifespan)
 
 
 @app.get("/")
-async def home() -> dict[str, str]:
-    return {"admin": "/admin"}
+async def home() -> dict[str, object]:
+    return {
+        "admin": "/admin",
+        "banner": await admin.shop_settings.aget("banner"),
+        "maintenance": await admin.shop_settings.aget("maintenance_mode"),
+    }
 
 
 def print_reset_link(user: Staff, url: str) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from types import SimpleNamespace
 from typing import Any
 from urllib.parse import parse_qsl, quote, unquote, urlencode
 
@@ -21,7 +22,7 @@ from .introspect import (
     pluralize,
     split_camel,
 )
-from .log import AdminLog, SavedFilter, record
+from .log import SETTINGS_SLUG, AdminLog, SavedFilter, record
 from .options import InlineAdmin, ModelAdmin
 
 MAX_INLINE_ROWS = 1000
@@ -362,7 +363,11 @@ def _int_or_zero(raw: Any) -> int:
 def activity(session: Any, request: Any, site: Any) -> Response:
     params = request.query_params
     # Only entries about models this person may see, since a label can reveal what's in a record.
-    visible = {slug: admin for slug, admin in site._registry.items() if admin.has_view_permission(request)}
+    visible: dict[str, Any] = {
+        slug: admin for slug, admin in site._registry.items() if admin.has_view_permission(request)
+    }
+    if site.settings and site.auth.has_perm(request.state.user, "settings.change"):
+        visible[SETTINGS_SLUG] = SimpleNamespace(name_plural="Settings")
     stmt = select(AdminLog).where(AdminLog.model.in_(visible))
     model, user, action_name = params.get("model", ""), params.get("user", ""), params.get("action", "")
     if model in visible:

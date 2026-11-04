@@ -9,6 +9,7 @@ from fastapi_panel import (
     LocalStorage,
     ModelAdmin,
     RichTextField,
+    Setting,
     SimpleFilter,
     TabularInline,
     ValidationError,
@@ -21,6 +22,12 @@ from fastapi_panel import (
 site.title = "Acme Shop"
 site.header = "Acme Shop"
 site.storage = LocalStorage("media")
+
+shop_settings = site.live_settings(
+    banner=Setting("", help_text="Shown at the top of the store.", group="Store"),
+    maintenance_mode=Setting(False, group="Store"),
+    free_shipping_over=Setting(Decimal("50.00"), group="Checkout", field=DecimalField(min_value=Decimal(0))),
+)
 
 
 class StockFilter(SimpleFilter):

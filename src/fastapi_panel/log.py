@@ -6,7 +6,9 @@ from typing import Any
 from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from .introspect import object_label, pk_string
+from .introspect import humanize, object_label, pk_string
+
+SETTINGS_SLUG = "live-settings"
 
 
 class Base(DeclarativeBase):
@@ -67,6 +69,16 @@ class StaffGroupMember(Base):
 
     def __str__(self) -> str:
         return f"User {self.user_id}"
+
+
+class LiveSetting(Base):
+    __tablename__ = "fastapi_panel_setting"
+
+    name: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+
+    def __str__(self) -> str:
+        return humanize(self.name)
 
 
 def record(session: Any, request: Any, admin: Any, obj: Any, action: str, message: str = "") -> None:

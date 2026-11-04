@@ -34,6 +34,7 @@ from .options import (
 )
 from .richtext import sanitize_html
 from .security import hash_password, verify_password
+from .settings import LiveSettings, Setting
 from .site import AdminSite, autodiscover, register, site
 from .storage import LocalStorage, Storage
 
@@ -57,10 +58,12 @@ __all__ = [
     "InlineAdmin",
     "IntegerField",
     "JSONField",
+    "LiveSettings",
     "LocalStorage",
     "ModelAdmin",
     "ModelAuth",
     "RichTextField",
+    "Setting",
     "SimpleFilter",
     "StaffGroup",
     "StackedInline",

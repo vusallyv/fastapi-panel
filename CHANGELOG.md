@@ -10,6 +10,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 - `object_actions`: buttons that run custom code on one record, with `get_object_actions` to choose which records get them
 
+- Live settings: `site.live_settings(...)` adds a Settings page, and `aget` and `get` read the values. It creates `fastapi_panel_setting`
+
 ### Fixed
 
 - Adding a user from the panel failed because the password column wasn't on the form. Admins for the `ModelAuth` model now get a hashed **Password** field. Only superusers can replace an existing user's password

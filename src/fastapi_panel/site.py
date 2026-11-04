@@ -33,14 +33,25 @@ from starlette.staticfiles import StaticFiles
 from . import __version__, imports, views
 from .db import Database
 from .groups import StaffGroupAdmin
-from .log import AdminLog, SavedFilter, StaffGroup, StaffGroupMember
+from .log import SETTINGS_SLUG, AdminLog, LiveSetting, SavedFilter, StaffGroup, StaffGroupMember
 from .log import Base as PanelBase
 from .options import ImproperlyConfigured, ModelAdmin
 from .security import MIN_PASSWORD_LENGTH, SECURITY_HEADERS, BodyTooLarge, LimitBody, LoginThrottle, Signer
+from .settings import LiveSettings, Setting, settings_view
 from .storage import Storage
 
 COOKIE_NAME = "fastapi_panel_session"
-RESERVED_SLUGS = {"login", "logout", "password", "static", "files", "forgot-password", "reset-password", "activity"}
+RESERVED_SLUGS = {
+    "login",
+    "logout",
+    "password",
+    "static",
+    "files",
+    "forgot-password",
+    "reset-password",
+    "activity",
+    SETTINGS_SLUG,
+}
 RESET_LINK_AGE = 3600
 logger = logging.getLogger("fastapi_panel")
 INLINE_FILE_TYPES = {"png", "jpg", "jpeg", "gif", "webp"}
@@ -74,6 +85,7 @@ class AdminSite:
         self.storage = storage
         self._registry: dict[str, ModelAdmin] = {}
         self._pages: list[dict[str, Any]] = []
+        self.settings: LiveSettings | None = None
         self._tables_ready = False
         self.templates = Environment(
             loader=ChoiceLoader(
@@ -129,6 +141,13 @@ class AdminSite:
 
     def unregister(self, model: type) -> None:
         self._registry = {slug: a for slug, a in self._registry.items() if a.model is not model}
+
+    def live_settings(self, **definitions: Setting) -> LiveSettings:
+        """Values people can change in the panel without a deploy. Adds a Settings page."""
+        if self.settings is not None:
+            raise ImproperlyConfigured("Call live_settings once, with every setting.")
+        self.settings = LiveSettings(self, definitions)
+        return self.settings
 
     def page(
         self,
@@ -216,6 +235,12 @@ class AdminSite:
         if self.audit_log and not any(page["path"] == "/activity" for page in self._pages):
             activity = self.page("/activity", title="Activity", group="System", permission="activity.view")
             activity(lambda session, request: views.activity(session, request, self))
+        settings_path = f"/{SETTINGS_SLUG}"
+        if self.settings and not any(page["path"] == settings_path for page in self._pages):
+            settings_page = self.page(
+                settings_path, title="Settings", group="System", methods=("GET", "POST"), permission="settings.change"
+            )
+            settings_page(lambda session, request: settings_view(session, request, self))
         panel = Starlette(
             routes=self._routes(),
             exception_handlers={404: self._not_found},
@@ -386,6 +411,8 @@ class AdminSite:
         tables = [SavedFilter.__table__, *([AdminLog.__table__] if self.audit_log else [])]
         if self.auth.groups:
             tables += [StaffGroup.__table__, StaffGroupMember.__table__]
+        if self.settings:
+            tables.append(LiveSetting.__table__)
         PanelBase.metadata.create_all(session.connection(), tables=tables)
         session.commit()
 

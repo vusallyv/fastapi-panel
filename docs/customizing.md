@@ -80,6 +80,38 @@ Settings for `mount`:
 | `password_reset` | `None` | A function that delivers reset links, see [Password reset](auth-and-permissions.md#password-reset) |
 | `public_url` | `None` | The panel's public address, required with `password_reset` |
 
+## Live settings
+
+Values that people change in the panel, with no code change or deploy, such as a banner or a shipping threshold:
+
+```python
+from decimal import Decimal
+
+from fastapi_panel import DecimalField, Setting, site
+
+settings = site.live_settings(
+    banner=Setting("", help_text="Shown at the top of the store.", group="Store"),
+    maintenance_mode=Setting(False, group="Store"),
+    free_shipping_over=Setting(Decimal("50.00"), group="Checkout", field=DecimalField(min_value=Decimal(0))),
+)
+```
+
+Then read them where you need them. A change applies on the next read, on every worker:
+
+```python
+@app.get("/checkout")
+async def checkout():
+    threshold = await settings.aget("free_shipping_over")  # a Decimal
+```
+
+`settings.get("name")` does the same in synchronous code on a sync engine. Both work once `site.mount` has run, and each read is one small query, so read once per request rather than in a loop.
+
+The default sets the type: `bool`, `int`, `float`, `Decimal`, `str`, `date`, `time`, `datetime`, `list` or `dict`. Pass `field=` for limits or a different input, as above. Only values different from the default are stored, so changing a default in code applies to anyone who hasn't changed that setting. An empty number goes back to its default. If a saved value no longer fits the type, the default is used and a warning is logged.
+
+The **Settings** page under System needs the `settings.change` permission. Each change appears on the Activity page with its old and new values, for anyone who has both `activity.view` and `settings.change`.
+
+A name that looks like a secret, such as `api_key`, is refused at startup, because values are stored unencrypted and shown in the form. Keep secrets in your environment.
+
 ## Custom pages
 
 ```python

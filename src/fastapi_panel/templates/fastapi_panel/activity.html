@@ -33,7 +33,7 @@
           <td>{{ entry.user_label }}</td>
           <td><span class="tag tag-{{ entry.action }}">{{ entry.action }}</span></td>
           <td>{{ models[entry.model].name_plural }}</td>
-          <td>{% if entry.action != "delete" %}<a href="{{ root }}/{{ entry.model }}/{{ entry.object_id|urlencode|replace('/', '%2F') }}/change">{{ entry.object_label }}</a>{% else %}{{ entry.object_label }}{% endif %}</td>
+          <td>{% if entry.model == "live-settings" %}<a href="{{ root }}/live-settings">{{ entry.object_label }}</a>{% elif entry.action != "delete" %}<a href="{{ root }}/{{ entry.model }}/{{ entry.object_id|urlencode|replace('/', '%2F') }}/change">{{ entry.object_label }}</a>{% else %}{{ entry.object_label }}{% endif %}</td>
           <td class="activity-details">{{ entry.message or "-" }}</td>
         </tr>
         {% else %}

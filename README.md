@@ -66,6 +66,7 @@ Want to try it first? The [example shop](https://github.com/zaman-labs/fastapi-p
 | **Inlines** | Tabular and stacked, with add, edit and delete on the parent's page |
 | **Actions** | Your own bulk actions and buttons on a single record, plus delete with a tree of what cascades and what blocks it, CSV export and "select all across pages" |
 | **Accounts and permissions** | Staff groups with a permissions grid, per model and per action, row-level through `get_queryset` and `has_*_permission`, with password reset by email |
+| **Live settings** | Values people change in the panel with no deploy, such as a banner or a shipping threshold |
 | **Audit log** | Who changed which fields and when, on each record's history and a site-wide Activity page, with old and new values for the fields you choose |
 | **Any SQLAlchemy setup** | Sync and async engines, SQLModel, composite primary keys |
 | **Timezones** | Show and enter times in your site's timezone, while the database stays in UTC |

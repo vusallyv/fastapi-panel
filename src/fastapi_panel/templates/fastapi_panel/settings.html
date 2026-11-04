@@ -1,0 +1,16 @@
+{% extends "fastapi_panel/base.html" %}
+{% from "fastapi_panel/widgets.html" import form_row %}
+{% block content %}
+<h1 class="page-title">{{ title }}</h1>
+<form method="post" action="{{ request.url.path }}" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {% for error in form.errors %}<div class="message message-error" role="alert">{{ error }}</div>{% endfor %}
+  {% for section in form.fieldsets %}
+  <fieldset class="card fieldset">
+    <legend class="card-title">{{ section.title }}</legend>
+    {% for row in section.rows %}<div class="form-row">{% for field in row %}{{ form_row(field) }}{% endfor %}</div>{% endfor %}
+  </fieldset>
+  {% endfor %}
+  <div class="submit-row"><button class="button button-primary" type="submit">Save</button></div>
+</form>
+{% endblock %}
