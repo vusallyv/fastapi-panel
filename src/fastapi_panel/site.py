@@ -250,6 +250,7 @@ class AdminSite:
             self._route("/{slug}/{pk}/change", self._object_view(views.change_form), methods=["GET", "POST"]),
             self._route("/{slug}/{pk}/delete", self._object_view(views.delete_view), methods=["GET", "POST"]),
             self._route("/{slug}/{pk}/history", self._object_view(views.history_view)),
+            self._route("/{slug}/{pk}/action/{name}", self._object_view(views.object_action), methods=["POST"]),
         ]
         return routes
 

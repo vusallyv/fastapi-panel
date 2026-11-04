@@ -242,6 +242,37 @@ class ProductAdmin(ModelAdmin):
 
 The panel commits for you. Return a `Response` to send something else back, such as a file. `delete_selected` and `export_csv` are included. Change that with `builtin_actions = ()`, choose the exported columns with `export_fields`, and adjust the limit with `action_max_rows` (10,000 by default).
 
+### Buttons on one record
+
+`object_actions` adds buttons next to **History** on a record's page, for things like a refund:
+
+```python
+from fastapi_panel import ModelAdmin, ValidationError, action
+
+
+class OrderAdmin(ModelAdmin):
+    object_actions = ("refund",)
+
+    @action("Refund", permissions=("change",), confirm="Refund this order?")
+    def refund(self, session, request, order):
+        if order.refunded:
+            raise ValidationError("This order was already refunded.")
+        order.refunded = True
+        self.message_user(request, "Refunded.")
+
+    def get_object_actions(self, request, order):
+        found = super().get_object_actions(request, order)
+        if order.status != "paid":
+            found.pop("refund", None)
+        return found
+```
+
+These use the same `@action` as bulk actions, but receive one object. The panel commits for you and writes the action to the record's history. Raising `ValidationError` undoes the changes and shows the message. Returning a `Response`, such as a file, sends that back instead of returning to the record. Unsaved edits on the page are lost when a button is clicked.
+
+`get_object_actions` is optional and decides which buttons a record gets. The same check runs when a button is posted, and `permissions` is checked for that record. A custom permission needs a `has_<name>_permission(self, request, obj=None)` method.
+
+### What deleting shows
+
 Before anything is deleted, a confirmation page shows a collapsible tree of everything that goes with it, with a count per model and a link to each record the user can open:
 
 - Rows removed by `cascade="..."` on your relationships or by `ON DELETE CASCADE` in the database are listed, at every level.
@@ -296,7 +327,7 @@ class ProductAdmin(ModelAdmin):
         return f"/products/{obj.slug}"
 ```
 
-Also available: `get_fields`, `get_fieldsets`, `get_readonly_fields`, `get_list_display`, `get_ordering`, `get_inlines`, `get_actions`, `get_list_filters`, `get_import_fields`, `restore_model`, `has_view_permission`, `has_add_permission`, `has_change_permission`, `has_delete_permission`, `has_module_permission` and `get_routes`.
+Also available: `get_fields`, `get_fieldsets`, `get_readonly_fields`, `get_list_display`, `get_ordering`, `get_inlines`, `get_actions`, `get_list_filters`, `get_import_fields`, `restore_model`, `has_view_permission`, `has_add_permission`, `has_change_permission`, `has_delete_permission`, `has_module_permission`, `get_object_actions` and `get_routes`.
 
 Hooks run on the event loop when you use an async engine, so database work through `session` is fine but slow blocking calls, like an HTTP request, aren't. Queue those for a background worker.
 

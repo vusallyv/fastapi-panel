@@ -77,7 +77,8 @@ def action(
     permissions: Iterable[str] = ("change",),
     confirm: str | None = None,
 ) -> Callable[[Callable], Callable]:
-    """Mark a bulk action. It's called as `fn(self, session, request, objects)`."""
+    """Mark an action. In `actions` it's called as `fn(self, session, request, objects)`, and in
+    `object_actions` as `fn(self, session, request, obj)`."""
 
     def decorate(fn: Callable) -> Callable:
         fn.description = description
@@ -406,6 +407,8 @@ class ModelAdmin(FormOptions):
     actions: Iterable[Any] = ()
     builtin_actions: Iterable[str] = ("delete_selected", "export_csv")
     action_max_rows = 10_000
+    # Buttons on one record's page. Each runs an @action method that takes a single object.
+    object_actions: Iterable[str] = ()
     export_fields: Iterable[Any] | None = None
     csv_import = False
     import_fields: Iterable[str] | None = None
@@ -631,6 +634,20 @@ class ModelAdmin(FormOptions):
             found["delete_selected"]["description"] = "Delete selected permanently"
         return found
 
+    def get_object_actions(self, request: Any, obj: Any) -> dict[str, dict[str, Any]]:
+        """The buttons for this record. Override to offer an action only on some records."""
+        found: dict[str, dict[str, Any]] = {}
+        for name in self.object_actions:
+            source = getattr(type(self), name)
+            needed = getattr(source, "permissions", ("change",))
+            if all(getattr(self, f"has_{perm}_permission")(request, obj) for perm in needed):
+                found[name] = {
+                    "fn": getattr(self, name),
+                    "description": getattr(source, "description", None) or humanize(name),
+                    "confirm": getattr(source, "confirm", None),
+                }
+        return found
+
     @action("Delete selected", permissions=("delete",))
     def delete_selected(self, session: Any, request: Any, objects: list[Any]) -> Response | None:
         from . import views
@@ -716,6 +733,9 @@ class ModelAdmin(FormOptions):
         for spec in (*self.actions, *self.builtin_actions):
             if isinstance(spec, str) and not callable(getattr(self, spec, None)):
                 fail("actions", spec)
+        for name in self.object_actions:
+            if not callable(getattr(self, name, None)):
+                fail("object_actions", name)
         for inline_class in self.inlines:
             inline_class(self).foreign_key()
         for options in (self, *[inline_class(self) for inline_class in self.inlines]):

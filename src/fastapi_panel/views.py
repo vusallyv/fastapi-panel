@@ -10,7 +10,7 @@ from sqlalchemy.orm import MANYTOONE
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
-from .forms import Form
+from .forms import Form, ValidationError
 from .introspect import (
     coerce_to_column,
     humanize,
@@ -681,6 +681,16 @@ def change_form(session: Any, request: Any, admin: ModelAdmin, pk: str | None = 
             if adding or not admin.site.audit_log
             else f"{_root(request)}/{admin.slug}/{_url_pk(obj)}/history",
             "view_on_site": None if adding else admin.view_on_site(obj),
+            "object_actions": []
+            if adding
+            else [
+                {
+                    "url": f"{_root(request)}/{admin.slug}/{_url_pk(obj)}/action/{name}{_keep_filters(request)}",
+                    "description": info["description"],
+                    "confirm": info["confirm"],
+                }
+                for name, info in admin.get_object_actions(request, obj).items()
+            ],
             "post_url": request.url.path + (f"?{request.url.query}" if request.url.query else ""),
         },
     )
@@ -982,6 +992,28 @@ def delete_selected(session: Any, request: Any, admin: ModelAdmin, objects: list
             "hidden": hidden,
         },
     )
+
+
+def object_action(session: Any, request: Any, admin: ModelAdmin, pk: str) -> Response:
+    obj = admin.get_object(session, request, pk)
+    # Looked up again here, so a button hidden from someone can't be run by posting to its address.
+    chosen = admin.get_object_actions(request, obj).get(request.path_params["name"])
+    if chosen is None:
+        raise HTTPException(404, "Not found.")
+    back = redirect(f"{_root(request)}/{admin.slug}/{_url_pk(obj)}/change{_keep_filters(request)}")
+    try:
+        result = chosen["fn"](session, request, obj)
+        record(session, request, admin, obj, "change", f"Ran “{chosen['description']}”")
+        session.commit()
+    except ValidationError as exc:
+        session.rollback()
+        admin.message_user(request, str(exc), "error")
+        return back
+    except DBAPIError:
+        session.rollback()
+        admin.message_user(request, DB_ERROR, "error")
+        return back
+    return result if isinstance(result, Response) else back
 
 
 def history_view(session: Any, request: Any, admin: ModelAdmin, pk: str) -> Response:

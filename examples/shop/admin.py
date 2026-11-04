@@ -107,6 +107,7 @@ class OrderAdmin(ModelAdmin):
     inlines = (OrderItemInline,)
     readonly_fields = ("created_at", "total")
     save_on_top = True
+    object_actions = ("mark_shipped",)
 
     @display("Status", ordering="status")
     def status_badge(self, order):
@@ -116,6 +117,17 @@ class OrderAdmin(ModelAdmin):
     @display("Total")
     def total(self, order):
         return f"${sum(item.quantity * item.unit_price for item in order.items):,.2f}"
+
+    @action("Mark as shipped", confirm="Mark this order as shipped?")
+    def mark_shipped(self, session, request, order):
+        order.status = OrderStatus.SHIPPED
+        self.message_user(request, f"{order} was marked as shipped.")
+
+    def get_object_actions(self, request, order):
+        found = super().get_object_actions(request, order)
+        if order.status is not OrderStatus.PAID:
+            found.pop("mark_shipped", None)
+        return found
 
     def clean(self, data, obj=None):
         if data.get("status") is OrderStatus.CANCELLED and not data.get("note"):

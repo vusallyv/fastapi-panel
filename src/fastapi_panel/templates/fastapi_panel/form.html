@@ -57,6 +57,12 @@
 <div class="page-head">
   <h1 class="page-title">{{ title }}</h1>
   <div class="page-links">
+    {% for item in object_actions %}
+    <form method="post" action="{{ item.url }}"{% if item.confirm %} data-confirm="{{ item.confirm }}"{% endif %}>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="button" type="submit">{{ item.description }}</button>
+    </form>
+    {% endfor %}
     {% if history_url %}<a class="button" href="{{ history_url }}">History</a>{% endif %}
     {% if view_on_site %}<a class="button" href="{{ view_on_site }}" rel="noopener noreferrer" target="_blank">View on site</a>{% endif %}
   </div>

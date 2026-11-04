@@ -8,6 +8,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 - Staff groups: `ModelAuth(..., groups=True)` adds a page where superusers tick permissions per model and choose members. It creates `fastapi_panel_group` and `fastapi_panel_group_member`
 
+- `object_actions`: buttons that run custom code on one record, with `get_object_actions` to choose which records get them
+
 ### Changed
 
 - The delete page shows a collapsible tree of what will be removed, with counts per model and links to records. It now includes database cascades and many-to-many links
