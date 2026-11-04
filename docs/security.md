@@ -15,7 +15,10 @@ An admin panel can reach all your data, so its defaults are strict and don't dep
 | Username discovery | One error message, and unknown usernames still cost a password check |
 | Password theft from the database | scrypt with a per-password salt |
 | Cross-site scripting | Autoescaped templates and the CSP. The audit log and flash messages are escaped too |
-| Clickjacking | `frame-ancestors 'none'` and `X-Frame-Options: DENY` |
+| Clickjacking | `frame-ancestors 'none'` and `X-Frame-Options: DENY`. The one exception is the add form opened by the **+** button, which only the panel itself may frame |
+| Malicious uploads | Names are generated, never taken from the client. Extensions are allowlisted, SVG and HTML are refused, and images are checked against their contents |
+| Uploaded files running as pages | Files come through signed, expiring links behind login, with `nosniff` and a sandboxing CSP. Anything but a plain image downloads instead of opening |
+| Path traversal | `LocalStorage` refuses any name that resolves outside its folder |
 | SQL injection | All queries go through SQLAlchemy with bound parameters. `LIKE` wildcards are escaped |
 | Mass assignment | Only fields on the form are written. Read-only fields and primary keys are ignored |
 | Probing data through URLs | Sorting and filtering are allowlisted, unknown parameters are ignored |
@@ -24,7 +27,7 @@ An admin panel can reach all your data, so its defaults are strict and don't dep
 | Secrets on screen | Columns named like credentials are hidden unless listed explicitly |
 | Secrets in logs | The audit log records field names, not values |
 | Spreadsheet formula injection | CSV cells starting with `=`, `+`, `-` or `@` are prefixed with `'` |
-| Oversized requests | POST bodies have a size limit, inline forms a row limit, and bulk actions a row limit |
+| Oversized requests | POST bodies have a size limit, counted as they arrive so chunked requests can't avoid it. Inline forms, bulk actions and CSV imports have row limits |
 | Misconfiguration | It won't start without an auth backend, or with a secret under 32 characters. Plain text passwords are refused in `StaticAuth`, and `ModelAuth` won't guess whether someone is staff |
 
 ## What's left to you
@@ -45,7 +48,8 @@ An admin panel can reach all your data, so its defaults are strict and don't dep
 
 - Throttling counters live in the process, so with `N` workers an attacker gets up to `5 × N` attempts per window. Put a shared rate limit in your proxy if that matters.
 - Sessions are stored in the cookie, so a single session can't be revoked from the server. See [Sessions](auth-and-permissions.md#sessions).
-- `max_body_size` reads the `Content-Length` header. Requests without one, such as chunked uploads, aren't limited here, so also set a limit in your proxy.
+- A file link works for any logged-in user who has it until it expires, even if that user can't see the record. Links are only given to people who can.
+- `FileField` doesn't look inside non-image files, so don't treat downloads as safe to open. Scan them yourself if strangers can upload.
 - Audit entries are only written for changes made through the panel, not for direct database changes.
 
 ## Reporting a vulnerability

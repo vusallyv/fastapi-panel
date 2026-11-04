@@ -59,8 +59,14 @@ AdminSite(
     template_dirs=["templates"],
     extra_css=["/static/brand.css"],
     audit_log=True,
+    timezone="Asia/Baku",
+    storage=LocalStorage("uploads"),
 )
 ```
+
+### Timezone
+
+`timezone` applies to lists, forms, CSV files, the audit log and the date filters. Your database doesn't change: aware columns are stored in UTC, and naive columns are treated as UTC too. If your naive columns hold local time, pass `naive_utc=False` to leave them exactly as they are. The date drill-down above a list groups by the stored value, so a row close to midnight can land on the neighboring day there.
 
 Settings for `mount`:
 

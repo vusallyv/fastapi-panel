@@ -51,7 +51,7 @@ site.mount(
 )
 ```
 
-Open `/admin`, log in, and you have a list page, add and edit forms, delete confirmation, bulk actions, CSV export and a change history. See the [getting started guide](docs/getting-started.md) for creating your first user and setting up migrations.
+Open `/admin`, log in, and you have a list page, add and edit forms, delete confirmation, bulk actions, CSV export and a change history. See the [getting started guide](docs/getting-started.md) for creating your first user with `python -m fastapi_panel createuser` and setting up migrations.
 
 Want to try it first? The [example shop](examples/shop) runs in one command.
 
@@ -60,12 +60,15 @@ Want to try it first? The [example shop](examples/shop) runs in one command.
 | | |
 |---|---|
 | **Change lists** | Columns, computed columns, sorting, search across relations, sidebar filters, date drill-down, pagination, editing in the list |
-| **Forms** | Built from your models, with fieldsets, read-only fields, prefilled slugs, validation hooks, Pydantic schemas, foreign key autocomplete, many-to-many pickers |
+| **Forms** | Built from your models, with fieldsets, read-only fields, prefilled slugs, validation hooks, Pydantic schemas, foreign key autocomplete, many-to-many pickers, and a **+** button to create a related record on the spot |
+| **Files and images** | Uploads with previews and thumbnails, stored on disk or anywhere else through a small storage class |
+| **Import and restore** | CSV import with a preview before anything is saved, and a Deleted page to restore soft-deleted records |
 | **Inlines** | Tabular and stacked, with add, edit and delete on the parent's page |
 | **Actions** | Your own bulk actions, plus delete with a summary of what cascades, CSV export and "select all across pages" |
 | **Permissions** | Per model and per action, row-level through `get_queryset` and `has_*_permission` |
 | **Audit log** | Who changed which fields and when, shown on each record's history page |
 | **Any SQLAlchemy setup** | Sync and async engines, SQLModel, composite primary keys |
+| **Timezones** | Show and enter times in your site's timezone, while the database stays in UTC |
 | **Interface** | Dark mode, works on a phone, keyboard friendly, no external assets |
 
 <table>
@@ -76,6 +79,10 @@ Want to try it first? The [example shop](examples/shop) runs in one command.
   <tr>
     <td><img alt="The dashboard with recent actions" src="docs/screenshots/dashboard.png"></td>
     <td><img alt="The product list in dark mode" src="docs/screenshots/changelist-dark.png"></td>
+  </tr>
+  <tr>
+    <td><img alt="Adding a category in a dialog from the product form" src="docs/screenshots/related-popup.png"></td>
+    <td><img alt="A CSV import preview before anything is saved" src="docs/screenshots/import-preview.png"></td>
   </tr>
 </table>
 
@@ -90,6 +97,7 @@ An admin panel can reach all your data, so these are on by default and have no o
 - Columns named like `password`, `token` or `secret` stay hidden unless you ask for them, and the audit log stores field names, never values
 - Only fields on the form can be written, and sort and filter parameters are allowlisted
 - Spreadsheet formulas are neutralised in CSV exports
+- Uploads get random names, images are checked against their contents, and files are only served behind login
 
 The panel refuses to start without authentication or with a short secret key. Read [the security guide](docs/security.md) for what's left to you.
 
@@ -103,7 +111,7 @@ The panel refuses to start without authentication or with a short secret key. Re
 
 ## Roadmap
 
-File and image fields, per-site timezones, translations, a saved-filters UI, password reset by email, and a Redis option for login throttling across workers. Ideas and pull requests are welcome, see [CONTRIBUTING](CONTRIBUTING.md).
+Translations, a saved-filters UI, password reset by email, two-factor login, and a Redis option for login throttling across workers. Ideas and pull requests are welcome, see [CONTRIBUTING](CONTRIBUTING.md).
 
 ## License
 

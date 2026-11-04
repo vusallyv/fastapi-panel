@@ -73,11 +73,16 @@ from passlib.hash import bcrypt
 ModelAuth(User, verify=bcrypt.verify, hasher=bcrypt.hash)
 ```
 
-To make the first user, hash a password and insert the row with whatever you normally use:
+To make the first user, point `createuser` at the module that calls `site.mount`:
 
 ```bash
-python -m fastapi_panel hash-password
+python -m fastapi_panel createuser main
+python -m fastapi_panel createuser app.main:support_site --username ana --no-superuser
 ```
+
+It asks for a username and password, and for any other column a user can't be saved without. In a deploy script, set the password in `FASTAPI_PANEL_PASSWORD` so it doesn't prompt. The tables must already exist.
+
+If you'd rather insert the row yourself, `python -m fastapi_panel hash-password` prints a password hash.
 
 No user table? `StaticAuth` keeps accounts in your configuration:
 

@@ -72,7 +72,9 @@ fieldsets = (
 )
 ```
 
-Fields are generated from column types: text, numbers, decimals, booleans, dates, times, enums, UUIDs and JSON. Foreign keys become a dropdown, and above 200 options they switch to autocomplete or an ID input so large tables stay fast. Times are shown in UTC.
+Fields are generated from column types: text, numbers, decimals, booleans, dates, times, enums, UUIDs and JSON. Foreign keys become a dropdown, and above 200 options they switch to autocomplete or an ID input so large tables stay fast.
+
+Next to a relation field there's a **+** button when the user may add to the related model. It opens the add form in a dialog and selects the new record when it's saved. The related model needs to be registered with a single primary key.
 
 These columns are left out of the default form. List one in `fields` to bring it back:
 
@@ -97,6 +99,74 @@ class OrderAdmin(ModelAdmin):
 Without `field` the error shows at the top of the form. `data` holds clean values and you can change it. `obj` is the existing row, or `None` when adding.
 
 Field validators work too: `CharField(validators=[check_sku])`. To validate with an existing schema, set `form_schema = ProductCreate`, and its errors appear next to the matching fields.
+
+## Files and images
+
+A file lives in a string column that holds its stored name. Set a storage on the site, then use `FileField` or `ImageField` for the column:
+
+```python
+from fastapi_panel import FileField, ImageField, LocalStorage, ModelAdmin, site
+
+site.storage = LocalStorage("/var/lib/myapp/uploads")  # outside anything your web server serves
+
+
+class ProductAdmin(ModelAdmin):
+    list_display = ("name", "photo")
+    field_overrides = {
+        "photo": ImageField(max_size=2 * 1024 * 1024),
+        "manual": FileField(allowed_extensions=("pdf",), upload_to="manuals"),
+    }
+```
+
+| Option | Default | What it does |
+|---|---|---|
+| `max_size` | 5 MB | Largest file, in bytes. `mount(max_body_size=...)`, 10 MB by default, must fit the whole form |
+| `allowed_extensions` | documents and images | `ImageField` takes PNG, JPEG, GIF and WEBP only |
+| `upload_to` | the model's name | The folder inside the storage |
+
+Lists show a thumbnail or a link, and forms show the current file with a preview of the new one. Both work in inlines too. File columns aren't part of CSV imports.
+
+Replaced and deleted files stay in storage, because a save can still roll back and a restored record needs its file. Clean them up with your own job if you need to, for example when a file holds personal data.
+
+To store files elsewhere, implement two methods. Files are still served through the panel, behind login:
+
+```python
+from fastapi_panel import Storage
+
+
+class S3Storage(Storage):
+    def save(self, file, name): ...  # `file` is a binary file object
+    def open(self, name): ...  # return a binary file object, raise FileNotFoundError if it's missing
+```
+
+## Soft delete and restore
+
+If your model marks rows as deleted, name the column. It must be a boolean or a nullable datetime:
+
+```python
+class ArticleAdmin(ModelAdmin):
+    soft_delete_field = "deleted_at"
+```
+
+Deleting now only sets the column, and the row disappears from lists, forms, dropdowns and autocomplete. A **Deleted** button on the list opens a page with the same search and filters, where people with change permission can restore rows and people with delete permission can remove them for good.
+
+This relies on `get_queryset`, so call `super().get_queryset(request)` when you override it. Your own `delete_model` replaces the behavior, and `restore_model` is there to override as well. Inline rows are always really deleted, and unique rules still count deleted rows, because the database does.
+
+## CSV import
+
+```python
+class ProductAdmin(ModelAdmin):
+    csv_import = True
+    import_fields = ("name", "slug", "category", "price")  # optional, the form's fields by default
+    import_max_rows = 5_000
+```
+
+An **Import** button appears for people who can add or change. They upload a file and see what each row would do before anything is saved. If any row has a problem, nothing is imported.
+
+- Columns match by field name or label, so a file from `export_csv` works. Other columns are listed and ignored. Commas and semicolons both work, and the file must be UTF-8.
+- A column with the primary key, like `ID`, updates that row, and only the columns in the file change. Without it, rows are added.
+- Relations and choices can use their label: `Home` for a category, `Shipped` for a status. Separate many-to-many values with commas.
+- Every row goes through the same validation as the form, including `clean`, and through `get_queryset` and the permission checks. `save_model` only runs on the real import, not the preview.
 
 ## Inlines
 
@@ -180,7 +250,7 @@ class ProductAdmin(ModelAdmin):
         return f"/products/{obj.slug}"
 ```
 
-Also available: `get_fields`, `get_fieldsets`, `get_readonly_fields`, `get_list_display`, `get_ordering`, `get_inlines`, `get_actions`, `get_list_filters`, `has_view_permission`, `has_add_permission`, `has_change_permission`, `has_delete_permission`, `has_module_permission` and `get_routes`.
+Also available: `get_fields`, `get_fieldsets`, `get_readonly_fields`, `get_list_display`, `get_ordering`, `get_inlines`, `get_actions`, `get_list_filters`, `get_import_fields`, `restore_model`, `has_view_permission`, `has_add_permission`, `has_change_permission`, `has_delete_permission`, `has_module_permission` and `get_routes`.
 
 Hooks run on the event loop when you use an async engine, so database work through `session` is fine but slow blocking calls, like an HTTP request, aren't. Queue those for a background worker.
 
