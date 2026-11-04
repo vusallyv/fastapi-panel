@@ -96,19 +96,21 @@ class ValuesFilter(_ColumnFilter):
 class DateFilter(_ColumnFilter):
     RANGES = {"today": 0, "7d": 7, "30d": 30, "365d": 365}
 
+    def __init__(self, model: type, name: str, site: Any) -> None:
+        super().__init__(model, name)
+        self.site = site
+
     def options(self, session: Any, request: Any) -> list[tuple[str, str]]:
         return [("today", "Today"), ("7d", "Past 7 days"), ("30d", "Past 30 days"), ("365d", "Past year")]
 
     def apply(self, stmt: Any, value: str, request: Any) -> Any:
         if value not in self.RANGES:
             return stmt
-        today = dt.datetime.now(dt.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today = self.site.now().replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
         start = today - dt.timedelta(days=self.RANGES[value])
-        if not getattr(self.attr.type, "timezone", False):
-            start = start.replace(tzinfo=None)
         if not isinstance(self.attr.type, sa.DateTime):
-            start = start.date()
-        return stmt.where(self.attr >= start)
+            return stmt.where(self.attr >= start.date())
+        return stmt.where(self.attr >= self.site.from_local(start, bool(self.attr.type.timezone)))
 
 
 class RelationFilter(_ColumnFilter):
@@ -132,7 +134,7 @@ class RelationFilter(_ColumnFilter):
         return stmt.where(self.attr.any(match) if self.attr.property.uselist else self.attr.has(match))
 
 
-def make_filter(model: type, spec: Any) -> Filter:
+def make_filter(model: type, spec: Any, site: Any) -> Filter:
     if isinstance(spec, type) and issubclass(spec, Filter):
         return spec()
     if isinstance(spec, Filter):
@@ -148,12 +150,15 @@ def make_filter(model: type, spec: Any) -> Filter:
     if isinstance(type_, sa.Enum):
         return EnumFilter(model, spec)
     if isinstance(type_, (sa.DateTime, sa.Date)):
-        return DateFilter(model, spec)
+        return DateFilter(model, spec, site)
     return ValuesFilter(model, spec)
 
 
 class DateHierarchy:
-    """Year > month > day drill-down above the changelist. Filters on ranges so indexes still apply."""
+    """Year > month > day drill-down above the changelist. Filters on ranges so indexes still apply.
+
+    shortcut: it groups by stored time, not the site timezone, because shifting needs SQL per database.
+    """
 
     def __init__(self, model: type, name: str) -> None:
         self.name = name

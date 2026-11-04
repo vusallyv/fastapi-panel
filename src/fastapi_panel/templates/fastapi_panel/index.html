@@ -32,7 +32,7 @@
         {% if entry.action != "delete" and entry.model in registry %}
         <a href="{{ root }}/{{ entry.model }}/{{ entry.object_id|urlencode|replace('/', '%2F') }}/change">{{ entry.object_label }}</a>
         {% else %}<span>{{ entry.object_label }}</span>{% endif %}
-        <small class="muted">{{ entry.model }} &middot; {{ entry.created_at.strftime("%Y-%m-%d %H:%M") }} UTC</small>
+        <small class="muted">{{ entry.model }} &middot; {{ entry.created_at|log_time }} {{ site.timezone }}</small>
       </li>
       {% endfor %}
     </ul>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import hmac
 import importlib
 import inspect as inspect_module
@@ -10,6 +11,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import FastAPI
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader, PackageLoader, select_autoescape
@@ -47,12 +49,16 @@ class AdminSite:
         template_dirs: Iterable[str | Path] = (),
         extra_css: Iterable[str] = (),
         audit_log: bool = True,
+        timezone: str = "UTC",
+        naive_utc: bool = True,
     ) -> None:
         self.title = title
         self.header = header or title
         self.index_title = index_title
         self.extra_css = list(extra_css)
         self.audit_log = audit_log
+        self.timezone = timezone
+        self.naive_utc = naive_utc
         self._registry: dict[str, ModelAdmin] = {}
         self._pages: list[dict[str, Any]] = []
         self._log_table_ready = not audit_log
@@ -62,6 +68,42 @@ class AdminSite:
             ),
             autoescape=select_autoescape(default=True, default_for_string=True),
         )
+        self.templates.filters["log_time"] = self._log_time
+
+    # Times. The database keeps its values, people see and type them in this timezone.
+
+    @property
+    def timezone(self) -> str:
+        return self._timezone
+
+    @timezone.setter
+    def timezone(self, name: str) -> None:
+        try:
+            self._zone = ZoneInfo(name)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ImproperlyConfigured(f"Unknown timezone {name!r}. Use a name like 'Europe/Paris'.") from None
+        self._timezone = name
+
+    def to_local(self, value: dt.datetime) -> dt.datetime:
+        if value.tzinfo is None:
+            if not self.naive_utc:
+                return value
+            value = value.replace(tzinfo=dt.timezone.utc)
+        return value.astimezone(self._zone)
+
+    def from_local(self, value: dt.datetime, aware: bool) -> dt.datetime:
+        """What to store for a time typed in the panel. `value` is naive, `aware` is the column's kind."""
+        if not aware and not self.naive_utc:
+            return value
+        stored = value.replace(tzinfo=self._zone).astimezone(dt.timezone.utc)
+        return stored if aware else stored.replace(tzinfo=None)
+
+    def now(self) -> dt.datetime:
+        return dt.datetime.now(self._zone)
+
+    def _log_time(self, value: dt.datetime, spec: str = "%Y-%m-%d %H:%M") -> str:
+        # The audit log always stores naive UTC, whatever naive_utc says about your own columns.
+        return value.replace(tzinfo=dt.timezone.utc).astimezone(self._zone).strftime(spec)
 
     # Registration
 

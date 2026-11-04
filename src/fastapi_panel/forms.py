@@ -228,23 +228,26 @@ class DateTimeField(Field):
     def __init__(self, *, aware: bool = False, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.aware = aware
+        self.site: Any = None
         self.attrs.setdefault("step", "1")
-        if aware and not self.help_text:
-            self.help_text = "In UTC."
+
+    def prepare(self, session: Any, request: Any, site: Any) -> None:
+        self.site = site
+        converted = site.naive_utc and site.timezone != "UTC"
+        if not self.help_text and (self.aware or converted):
+            self.help_text = f"In {site.timezone}."
 
     def format(self, value: Any) -> str:
         if value is None:
             return ""
-        if value.tzinfo:
-            value = value.astimezone(dt.timezone.utc).replace(tzinfo=None)
-        return value.isoformat(timespec="seconds")
+        return self.site.to_local(value).replace(tzinfo=None).isoformat(timespec="seconds")
 
     def to_python(self, raw: str) -> dt.datetime:
         try:
             value = dt.datetime.fromisoformat(raw)
         except ValueError:
             raise ValidationError("Enter a valid date and time.") from None
-        return value.replace(tzinfo=dt.timezone.utc) if self.aware else value.replace(tzinfo=None)
+        return self.site.from_local(value.replace(tzinfo=None), self.aware)
 
 
 class UUIDField(Field):

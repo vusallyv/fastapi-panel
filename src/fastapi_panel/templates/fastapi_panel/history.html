@@ -5,11 +5,11 @@
   {% if entries %}
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th scope="col">When (UTC)</th><th scope="col">User</th><th scope="col">Action</th><th scope="col">Details</th></tr></thead>
+      <thead><tr><th scope="col">When ({{ site.timezone }})</th><th scope="col">User</th><th scope="col">Action</th><th scope="col">Details</th></tr></thead>
       <tbody>
         {% for entry in entries %}
         <tr>
-          <td>{{ entry.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+          <td>{{ entry.created_at|log_time("%Y-%m-%d %H:%M:%S") }}</td>
           <td>{{ entry.user_label }}</td>
           <td><span class="tag tag-{{ entry.action }}">{{ entry.action }}</span></td>
           <td>{{ entry.message or "-" }}</td>
