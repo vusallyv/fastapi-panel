@@ -191,7 +191,7 @@ def _render_changelist(
             field = by_name.get(column) if isinstance(column, str) and column in editable else None
             cells.append(
                 {
-                    "value": None if field else admin.cell(obj, column),
+                    "value": None if field else admin.cell(obj, column, request),
                     "field": field,
                     "link": column in link_columns,
                     "name": column if isinstance(column, str) else column.__name__,

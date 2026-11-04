@@ -4,11 +4,13 @@ import datetime as dt
 import hmac
 import importlib
 import inspect as inspect_module
+import mimetypes
 import pkgutil
+import re
 import secrets
 import time
-from collections.abc import Callable, Iterable
-from pathlib import Path
+from collections.abc import Callable, Iterable, Iterator
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -20,8 +22,9 @@ from sqlalchemy.exc import DBAPIError
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
+from starlette.middleware import Middleware
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, RedirectResponse, Response
+from starlette.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
@@ -29,10 +32,13 @@ from . import __version__, imports, views
 from .db import Database
 from .log import AdminLog
 from .options import ImproperlyConfigured, ModelAdmin
-from .security import SECURITY_HEADERS, LoginThrottle, Signer
+from .security import SECURITY_HEADERS, BodyTooLarge, LimitBody, LoginThrottle, Signer
+from .storage import Storage
 
 COOKIE_NAME = "fastapi_panel_session"
-RESERVED_SLUGS = {"login", "logout", "password", "static"}
+RESERVED_SLUGS = {"login", "logout", "password", "static", "files"}
+INLINE_FILE_TYPES = {"png", "jpg", "jpeg", "gif", "webp"}
+FILE_CSP = "default-src 'none'; sandbox"
 MIN_SECRET_LENGTH = 32
 MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 4096
@@ -51,6 +57,7 @@ class AdminSite:
         audit_log: bool = True,
         timezone: str = "UTC",
         naive_utc: bool = True,
+        storage: Storage | None = None,
     ) -> None:
         self.title = title
         self.header = header or title
@@ -59,6 +66,7 @@ class AdminSite:
         self.audit_log = audit_log
         self.timezone = timezone
         self.naive_utc = naive_utc
+        self.storage = storage
         self._registry: dict[str, ModelAdmin] = {}
         self._pages: list[dict[str, Any]] = []
         self._log_table_ready = not audit_log
@@ -181,6 +189,7 @@ class AdminSite:
         self.db = Database(engine)
         self.auth = auth
         self.signer = Signer(secret_key)
+        self.file_signer = Signer(secret_key, salt="files")
         self.session_age = session_age
         self.secure_cookies = secure_cookies
         self.trusted_origins = set(trusted_origins)
@@ -188,7 +197,12 @@ class AdminSite:
         self.throttle = LoginThrottle()
         for admin in self._registry.values():
             admin.check()
-        app.mount(path, Starlette(routes=self._routes(), exception_handlers={404: self._not_found}))
+        panel = Starlette(
+            routes=self._routes(),
+            exception_handlers={404: self._not_found},
+            middleware=[Middleware(LimitBody, limit=max_body_size)],
+        )
+        app.mount(path, panel)
 
     def _routes(self) -> list[Any]:
         routes: list[Any] = [
@@ -196,6 +210,7 @@ class AdminSite:
             self._route("/login", self._login, methods=["GET", "POST"], public=True),
             self._route("/logout", self._logout, methods=["POST"]),
             self._route("/password", self._change_password, methods=["GET", "POST"]),
+            self._route("/files/{token}", self._serve_file),
             Mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static"),
         ]
         for page in self._pages:
@@ -258,6 +273,8 @@ class AdminSite:
                 response = await self.db.run(view, request)
         except HTTPException as exc:
             response = self._error_page(request, exc.status_code, exc.detail)
+        finally:
+            await request.close()
         for name, value in SECURITY_HEADERS.items():
             response.headers.setdefault(name, value)
         if request.state.session != before or not request.cookies.get(COOKIE_NAME):
@@ -299,7 +316,10 @@ class AdminSite:
         elif origin == "null" or request.headers.get("sec-fetch-site") == "cross-site":
             raise HTTPException(403, "This request came from another site and was blocked.")
 
-        form = await request.form(max_fields=MAX_FORM_FIELDS, max_part_size=self.max_body_size)
+        try:
+            form = await request.form(max_fields=MAX_FORM_FIELDS, max_part_size=self.max_body_size)
+        except BodyTooLarge:
+            raise HTTPException(413, "That request is too large.") from None
         request.state.form = form
         token = form.get("csrf_token", "")
         if not isinstance(token, str) or not hmac.compare_digest(token, request.state.session["csrf"]):
@@ -468,6 +488,38 @@ class AdminSite:
             "fastapi_panel/login.html",
             {"title": "Log in", "error": error, "username": username, "next": raw_next if target == raw_next else ""},
             status_code=status,
+        )
+
+    def file_url(self, request: Request, name: str) -> str:
+        # Links are minted for someone who may see the record, and only work with a logged-in session.
+        token = self.file_signer.dumps({"name": name, "exp": time.time() + self.session_age})
+        return f"{request.scope['root_path']}/files/{token}"
+
+    def _serve_file(self, session: Any, request: Request) -> Response:
+        payload = self.file_signer.loads(request.path_params["token"])
+        if not isinstance(payload, dict) or payload.get("exp", 0) < time.time() or not self.storage:
+            raise HTTPException(404, "This file doesn't exist.")
+        name = str(payload.get("name", ""))
+        try:
+            stream = self.storage.open(name)
+        except (FileNotFoundError, IsADirectoryError, ValueError):
+            raise HTTPException(404, "This file doesn't exist.") from None
+
+        def chunks() -> Iterator[bytes]:
+            with stream:
+                yield from iter(lambda: stream.read(64 * 1024), b"")
+
+        filename = re.sub(r"[^\w.-]", "_", PurePosixPath(name).name)
+        extension = PurePosixPath(name).suffix.lstrip(".").lower()
+        # Anything but a plain image downloads, so an uploaded page can't run on the panel's origin.
+        disposition = "inline" if extension in INLINE_FILE_TYPES else "attachment"
+        return StreamingResponse(
+            chunks(),
+            media_type=mimetypes.guess_type(filename)[0] or "application/octet-stream",
+            headers={
+                "Content-Disposition": f'{disposition}; filename="{filename}"',
+                "Content-Security-Policy": FILE_CSP,
+            },
         )
 
     def _logout(self, session: Any, request: Request) -> Response:

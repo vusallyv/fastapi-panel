@@ -6,6 +6,7 @@ import hmac
 import json
 import secrets
 import time
+from typing import Any
 
 SCRYPT_N = 2**15
 SCRYPT_R = 8
@@ -36,7 +37,7 @@ class Signer:
 
     def loads(self, token: str) -> object | None:
         payload, _, signature = token.partition(".")
-        if not hmac.compare_digest(self._signature(payload), signature):
+        if not hmac.compare_digest(self._signature(payload).encode(), signature.encode()):
             return None
         try:
             return json.loads(_b64decode(payload))
@@ -98,9 +99,34 @@ class LoginThrottle:
         self._failures.pop(key, None)
 
 
+class BodyTooLarge(Exception):
+    pass
+
+
+class LimitBody:
+    """Counts the bytes as they arrive, because a chunked request has no Content-Length to check."""
+
+    def __init__(self, app: Any, limit: int) -> None:
+        self.app = app
+        self.limit = limit
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        seen = 0
+
+        async def limited() -> Any:
+            nonlocal seen
+            message = await receive()
+            seen += len(message.get("body", b""))
+            if seen > self.limit:
+                raise BodyTooLarge
+            return message
+
+        await self.app(scope, limited if scope["type"] == "http" else receive, send)
+
+
 SECURITY_HEADERS = {
     "Content-Security-Policy": (
-        "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; "
         "font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; "
         "frame-ancestors 'none'"
     ),

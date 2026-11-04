@@ -11,7 +11,9 @@ from .forms import (
     DecimalField,
     EmailField,
     Field,
+    FileField,
     FloatField,
+    ImageField,
     IntegerField,
     JSONField,
     TextField,
@@ -31,6 +33,7 @@ from .options import (
 )
 from .security import hash_password, verify_password
 from .site import AdminSite, autodiscover, register, site
+from .storage import LocalStorage, Storage
 
 __all__ = [
     "AdminLog",
@@ -44,17 +47,21 @@ __all__ = [
     "DecimalField",
     "EmailField",
     "Field",
+    "FileField",
     "Filter",
     "FloatField",
+    "ImageField",
     "ImproperlyConfigured",
     "InlineAdmin",
     "IntegerField",
     "JSONField",
+    "LocalStorage",
     "ModelAdmin",
     "ModelAuth",
     "SimpleFilter",
     "StackedInline",
     "StaticAuth",
+    "Storage",
     "TabularInline",
     "TextField",
     "TimeField",

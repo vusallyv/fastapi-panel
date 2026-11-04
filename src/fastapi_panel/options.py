@@ -14,11 +14,21 @@ from markupsafe import Markup
 from sqlalchemy import Boolean, DateTime, inspect, or_, select
 from sqlalchemy.exc import NoInspectionAvailable
 from sqlalchemy.orm import selectinload
+from starlette.datastructures import UploadFile
 from starlette.exceptions import HTTPException
 from starlette.responses import Response
 
 from .filters import DateHierarchy, Filter, make_filter
-from .forms import Field, Form, ManyToManyField, ReadOnlyField, RelationField, ValidationError, fields_for_model
+from .forms import (
+    Field,
+    FileField,
+    Form,
+    ManyToManyField,
+    ReadOnlyField,
+    RelationField,
+    ValidationError,
+    fields_for_model,
+)
 from .introspect import (
     humanize,
     object_label,
@@ -194,7 +204,9 @@ class FormOptions:
             )
             if locked:
                 field = ReadOnlyField(label=self.column_label(name)).bind(name, prefix)
-                field.display = self.cell(obj, name) if obj is not None and persisted else self.empty_value_display
+                field.display = (
+                    self.cell(obj, name, request) if obj is not None and persisted else self.empty_value_display
+                )
             else:
                 field = source.bind(name, prefix)
                 if isinstance(field, (RelationField, ManyToManyField)):
@@ -225,7 +237,8 @@ class FormOptions:
                 form.add_error(exc)
         if form.is_valid and self.form_schema is not None:
             try:
-                self.form_schema.model_validate(form.cleaned)
+                values = {k: v.filename if isinstance(v, UploadFile) else v for k, v in form.cleaned.items()}
+                self.form_schema.model_validate(values)
             except pydantic.ValidationError as exc:
                 for error in exc.errors():
                     name = str(error["loc"][0]) if error["loc"] else None
@@ -268,9 +281,13 @@ class FormOptions:
         value = self.field_value(obj, name)
         return self.site.to_local(value) if isinstance(value, dt.datetime) else value
 
-    def cell(self, obj: Any, name: Any) -> Any:
+    def cell(self, obj: Any, name: Any, request: Any) -> Any:
+        value = self.display_value(obj, name)
+        field = self._available_fields()[0].get(name) if isinstance(name, str) else None
+        if isinstance(field, FileField) and value:
+            return field.render(self.site, request, value)
         return format_value(
-            self.display_value(obj, name),
+            value,
             self._display_attribute(name, "empty_value") or self.empty_value_display,
             bool(self._display_attribute(name, "boolean")),
         )
@@ -527,7 +544,8 @@ class ModelAdmin(FormOptions):
         names: list[str] = []
         for row in self.get_fields(request):
             names.extend(row if isinstance(row, (tuple, list)) else [row])
-        return [name for name in names if name not in readonly]
+        available, _ = self._available_fields()
+        return [name for name in names if name not in readonly and not isinstance(available.get(name), FileField)]
 
     def can_import(self, request: Any) -> bool:
         return self.csv_import and (self.has_add_permission(request) or self.has_change_permission(request))
@@ -678,6 +696,12 @@ class ModelAdmin(FormOptions):
                 fail("actions", spec)
         for inline_class in self.inlines:
             inline_class(self).foreign_key()
+        for options in (self, *[inline_class(self) for inline_class in self.inlines]):
+            if not self.site.storage and any(isinstance(f, FileField) for f in options._available_fields()[0].values()):
+                raise ImproperlyConfigured(
+                    f"{type(options).__name__} has a file field, so the site needs a storage: "
+                    'AdminSite(storage=LocalStorage("media")).'
+                )
         declared = self.fields or []
         for name in declared:
             for part in name if isinstance(name, (tuple, list)) else [name]:

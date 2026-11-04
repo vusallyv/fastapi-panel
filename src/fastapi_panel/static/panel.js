@@ -269,6 +269,25 @@ function setupDualSelects(root = document) {
   });
 }
 
+function setupFileFields(root = document) {
+  $$("[data-file-field]", root).forEach((box) => {
+    const input = $("input[type=file]", box);
+    const preview = $("[data-file-preview]", box);
+    const error = $("[data-file-error]", box);
+    input.addEventListener("change", () => {
+      const file = input.files[0];
+      const tooLarge = file && file.size > Number(input.dataset.maxSize);
+      error.hidden = !tooLarge;
+      error.textContent = tooLarge ? "This file is too large." : "";
+      if (tooLarge) input.value = "";
+      if (preview.src) URL.revokeObjectURL(preview.src);
+      const showPreview = file && !tooLarge && file.type.startsWith("image/") && file.type !== "image/svg+xml";
+      preview.hidden = !showPreview;
+      if (showPreview) preview.src = URL.createObjectURL(file);
+    });
+  });
+}
+
 function setupInlines() {
   $$("[data-inline]").forEach((inline) => {
     const rows = $("[data-inline-rows]", inline);
@@ -288,6 +307,7 @@ function setupInlines() {
       setupPrepopulate(row);
       setupAutocomplete(row);
       setupDualSelects(row);
+      setupFileFields(row);
     });
 
     // Removed rows leave a gap in the numbering. The server skips blanks, so that's fine.
@@ -303,4 +323,5 @@ setupChangelist();
 setupPrepopulate();
 setupAutocomplete();
 setupDualSelects();
+setupFileFields();
 setupInlines();

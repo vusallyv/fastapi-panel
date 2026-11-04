@@ -57,7 +57,7 @@
   </div>
 </div>
 
-<form method="post" action="{{ post_url }}" novalidate data-change-form>
+<form method="post" action="{{ post_url }}" enctype="multipart/form-data" novalidate data-change-form>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   {% if save_on_top %}{{ submit_row(top=True) }}{% endif %}
 

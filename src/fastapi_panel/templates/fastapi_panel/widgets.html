@@ -21,6 +21,19 @@
     <option value="{{ value }}"{% if value in field.value %} selected{% endif %}>{{ label }}</option>
     {% endfor %}
   </select>
+{% elif field.widget == "file" %}
+  <div class="file-field" data-file-field>
+    {% if field.current %}
+    <div class="file-current">
+      {% if field.is_image %}<a href="{{ field.current_url }}" target="_blank" rel="noopener"><img class="thumb-large" src="{{ field.current_url }}" alt="Current {{ field.label|lower }}" loading="lazy"></a>{% endif %}
+      <a href="{{ field.current_url }}" target="_blank" rel="noopener">{{ field.current_name }}</a>
+      {% if not field.required %}<label class="delete-toggle"><input type="checkbox" name="{{ field.html_name }}-clear"> Remove</label>{% endif %}
+    </div>
+    {% endif %}
+    <img class="thumb-large" data-file-preview alt="Selected image preview" hidden>
+    <input id="id_{{ field.html_name }}" name="{{ field.html_name }}" type="file"{% if describedby %} aria-describedby="{{ describedby }}"{% endif %}{{ attrs(field) }}>
+    <p class="field-error" data-file-error role="alert" hidden></p>
+  </div>
 {% elif field.widget == "autocomplete" %}
   <div class="autocomplete" data-autocomplete="{{ field.autocomplete_url }}" data-name="{{ field.html_name }}"{% if field.value is sequence and field.value is not string %} data-multiple{% endif %}>
     <div class="autocomplete-chips" data-chips>

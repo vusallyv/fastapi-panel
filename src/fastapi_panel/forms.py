@@ -8,19 +8,38 @@ import functools
 import json
 import math
 import re
+import secrets
 import uuid
 from collections.abc import Callable, Iterable
+from pathlib import PurePosixPath
 from typing import Any
 
 import sqlalchemy as sa
+from markupsafe import Markup
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import MANYTOMANY, MANYTOONE
+from starlette.datastructures import UploadFile
 
 from .introspect import coerce_to_column, humanize, object_label
 
 SENSITIVE_NAME = re.compile(r"password|passwd|secret|token|api_?key|private_?key", re.I)
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 RELATION_SELECT_LIMIT = 200
+IMAGE_SIGNATURES: dict[str, Callable[[bytes], bool]] = {
+    "png": lambda head: head.startswith(b"\x89PNG\r\n\x1a\n"),
+    "jpg": lambda head: head.startswith(b"\xff\xd8\xff"),
+    "jpeg": lambda head: head.startswith(b"\xff\xd8\xff"),
+    "gif": lambda head: head[:6] in (b"GIF87a", b"GIF89a"),
+    "webp": lambda head: head[:4] == b"RIFF" and head[8:12] == b"WEBP",
+}
+
+
+def _extension(name: str) -> str:
+    return PurePosixPath(name.replace("\\", "/")).suffix.lstrip(".").lower()
+
+
+def _size_label(size: int) -> str:
+    return f"{size / (1024 * 1024):g} MB" if size >= 1024 * 1024 else f"{size // 1024} KB"
 
 
 class ValidationError(Exception):
@@ -293,6 +312,110 @@ class EnumField(ChoiceField):
 
     def format(self, value: Any) -> str:
         return "" if value is None else value.name
+
+
+class FileField(Field):
+    """A column holding the stored file's name. Needs a storage: `AdminSite(storage=LocalStorage(...))`."""
+
+    widget = "file"
+    allowed = ("pdf", "txt", "csv", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "zip", *IMAGE_SIGNATURES)
+    current = ""
+
+    def __init__(
+        self,
+        *,
+        allowed_extensions: Iterable[str] | None = None,
+        max_size: int = 5 * 1024 * 1024,
+        upload_to: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.allowed_extensions = {e.lower().lstrip(".") for e in allowed_extensions or self.allowed}
+        self.max_size = max_size
+        self.upload_to = upload_to
+        self.site: Any = None
+        self.request: Any = None
+        accept = ",".join(f".{e}" for e in sorted(self.allowed_extensions))
+        self.attrs = {"accept": accept, "data-max-size": max_size, **self.attrs}
+        self.help_text = self.help_text or f"Up to {_size_label(max_size)}."
+
+    def prepare(self, session: Any, request: Any, site: Any) -> None:
+        self.site = site
+        self.request = request
+
+    def read(self, obj: Any) -> Any:
+        self.current = getattr(obj, self.attr) or ""
+        return self.current
+
+    def format(self, value: Any) -> str:
+        if isinstance(value, UploadFile):
+            return value.filename or ""
+        return value or ""
+
+    def extract(self, data: Any) -> Any:
+        upload = data.get(self.html_name)
+        if isinstance(upload, UploadFile) and upload.filename:
+            return upload
+        return "" if data.get(f"{self.html_name}-clear") else self.current
+
+    def clean(self, raw: Any) -> Any:
+        if isinstance(raw, UploadFile):
+            self.check_upload(raw)
+            return raw
+        if not raw and self.required:
+            raise ValidationError("Choose a file.")
+        return raw or self.empty_value
+
+    def check_upload(self, upload: UploadFile) -> None:
+        extension = _extension(upload.filename or "")
+        if extension not in self.allowed_extensions:
+            raise ValidationError(f"Use one of these file types: {', '.join(sorted(self.allowed_extensions))}.")
+        if upload.size is not None and upload.size > self.max_size:
+            raise ValidationError(f"This file is too large. The limit is {_size_label(self.max_size)}.")
+        for validate in self.validators:
+            validate(upload)
+
+    def write(self, obj: Any, value: Any) -> None:
+        if isinstance(value, UploadFile):
+            folder = self.upload_to or type(obj).__name__.lower()
+            stem = re.sub(r"[^a-z0-9]+", "-", PurePosixPath(value.filename.replace("\\", "/")).stem.lower()).strip("-")
+            # shortcut: replaced and deleted files stay in storage, a save can still roll back and restores need them
+            name = f"{folder}/{stem[:40] or 'file'}-{secrets.token_hex(6)}.{_extension(value.filename)}"
+            value.file.seek(0)
+            self.site.storage.save(value.file, name)
+            value = name
+        setattr(obj, self.attr, value)
+
+    @property
+    def current_name(self) -> str:
+        return PurePosixPath(self.current).name
+
+    @property
+    def current_url(self) -> str:
+        return self.site.file_url(self.request, self.current)
+
+    @property
+    def is_image(self) -> bool:
+        return _extension(self.current) in IMAGE_SIGNATURES
+
+    def render(self, site: Any, request: Any, value: str) -> Markup:
+        url = site.file_url(request, value)
+        if _extension(value) in IMAGE_SIGNATURES:
+            return Markup('<a href="{}"><img class="thumb" src="{}" alt="" loading="lazy"></a>').format(url, url)
+        return Markup('<a href="{}">{}</a>').format(url, PurePosixPath(value).name)
+
+
+class ImageField(FileField):
+    """Only PNG, JPEG, GIF and WEBP, checked against the file's contents. SVG can run scripts, so it isn't allowed."""
+
+    allowed = tuple(IMAGE_SIGNATURES)
+
+    def check_upload(self, upload: UploadFile) -> None:
+        super().check_upload(upload)
+        head = upload.file.read(16)
+        upload.file.seek(0)
+        if not IMAGE_SIGNATURES.get(_extension(upload.filename or ""), lambda _: False)(head):
+            raise ValidationError("This file isn't a valid image.")
 
 
 class ReadOnlyField(Field):
