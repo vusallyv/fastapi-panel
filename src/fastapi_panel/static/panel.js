@@ -24,7 +24,7 @@ function setupChrome() {
     $$("[data-nav-group]").forEach((group) => {
       const items = $$("[data-nav-item]", group);
       items.forEach((item) => {
-        item.hidden = !item.textContent.toLowerCase().includes(term);
+        item.hidden = !$("a", item).textContent.toLowerCase().includes(term);
       });
       group.hidden = items.every((item) => item.hidden);
     });

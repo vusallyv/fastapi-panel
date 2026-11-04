@@ -93,6 +93,11 @@ def main() -> int:
         page.goto(f"{BASE}/")
         shot("dashboard")
 
+        page.fill("[data-nav-filter]", "add")
+        assert page.locator("[data-nav-item]:visible").count() == 0, "the Add links shouldn't match the model filter"
+        page.fill("[data-nav-filter]", "prod")
+        assert page.locator("[data-nav-item]:visible").count() == 1
+
         page.click("[data-toggle-theme]")
         page.goto(f"{BASE}/product")
         shot("changelist-dark")

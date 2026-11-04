@@ -119,7 +119,7 @@ The default Content-Security-Policy blocks inline scripts and styles, so keep yo
 Everything uses CSS variables. Load a stylesheet with `extra_css` and override them:
 
 ```css
-:root { --accent: #6d28d9; --accent-hover: #5b21b6; --accent-soft: #ede9fe; --sidebar: #1e1b4b; }
+:root { --accent: #6d28d9; --accent-hover: #5b21b6; --accent-soft: #ede9fe; }
 :root[data-theme="dark"] { --accent: #a78bfa; --on-accent: #1e1b4b; }
 ```
 
