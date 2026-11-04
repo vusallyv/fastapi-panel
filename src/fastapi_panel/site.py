@@ -25,7 +25,7 @@ from starlette.responses import HTMLResponse, RedirectResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from . import __version__, views
+from . import __version__, imports, views
 from .db import Database
 from .log import AdminLog
 from .options import ImproperlyConfigured, ModelAdmin
@@ -208,6 +208,7 @@ class AdminSite:
             self._route("/{slug}/add", self._model_view(views.change_form), methods=["GET", "POST"]),
             self._route("/{slug}/autocomplete", self._model_view(views.autocomplete)),
             self._route("/{slug}/deleted", self._model_view(views.trash), methods=["GET", "POST"]),
+            self._route("/{slug}/import", self._model_view(imports.import_view), methods=["GET", "POST"]),
             self._route("/{slug}/{pk}/change", self._object_view(views.change_form), methods=["GET", "POST"]),
             self._route("/{slug}/{pk}/delete", self._object_view(views.delete_view), methods=["GET", "POST"]),
             self._route("/{slug}/{pk}/history", self._object_view(views.history_view)),
@@ -298,7 +299,7 @@ class AdminSite:
         elif origin == "null" or request.headers.get("sec-fetch-site") == "cross-site":
             raise HTTPException(403, "This request came from another site and was blocked.")
 
-        form = await request.form(max_fields=MAX_FORM_FIELDS)
+        form = await request.form(max_fields=MAX_FORM_FIELDS, max_part_size=self.max_body_size)
         request.state.form = form
         token = form.get("csrf_token", "")
         if not isinstance(token, str) or not hmac.compare_digest(token, request.state.session["csrf"]):

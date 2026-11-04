@@ -368,6 +368,9 @@ class ModelAdmin(FormOptions):
     builtin_actions: Iterable[str] = ("delete_selected", "export_csv")
     action_max_rows = 10_000
     export_fields: Iterable[Any] | None = None
+    csv_import = False
+    import_fields: Iterable[str] | None = None
+    import_max_rows = 5_000
 
     # Form page
     fieldsets: Iterable[tuple[str | None, dict[str, Any]]] | None = None
@@ -516,6 +519,18 @@ class ModelAdmin(FormOptions):
 
     def get_list_form(self, session: Any, request: Any, obj: Any, prefix: str) -> Form:
         return self.build_form(session, request, obj, persisted=True, names=list(self.list_editable), prefix=prefix)
+
+    def get_import_fields(self, request: Any) -> list[str]:
+        if self.import_fields is not None:
+            return list(self.import_fields)
+        readonly = set(self.get_readonly_fields(request))
+        names: list[str] = []
+        for row in self.get_fields(request):
+            names.extend(row if isinstance(row, (tuple, list)) else [row])
+        return [name for name in names if name not in readonly]
+
+    def can_import(self, request: Any) -> bool:
+        return self.csv_import and (self.has_add_permission(request) or self.has_change_permission(request))
 
     def view_on_site(self, obj: Any) -> str | None:
         """Return the public URL of `obj` to get a "View on site" button."""

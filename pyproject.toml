@@ -31,6 +31,7 @@ dependencies = [
     "fastapi>=0.110",
     "jinja2>=3.1",
     "python-multipart>=0.0.18",
+    "starlette>=0.40",
     "sqlalchemy[asyncio]>=2.0.20",
 ]
 

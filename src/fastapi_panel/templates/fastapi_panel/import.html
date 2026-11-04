@@ -1,0 +1,76 @@
+{% extends "fastapi_panel/base.html" %}
+
+{% macro upload_form(first) %}
+<form method="post" action="{{ post_url }}" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label for="id_file">{{ "CSV file" if first else "Choose another file" }}</label>
+  <input id="id_file" name="file" type="file" accept=".csv,text/csv" required>
+  <div class="submit-row">
+    <button class="button{% if first %} button-primary{% endif %}" type="submit">Check file</button>
+    {% if first %}<a class="button" href="{{ post_url }}?template=1">Download template</a>{% endif %}
+    <a class="button push-end" href="{{ list_url }}">Cancel</a>
+  </div>
+</form>
+{% endmacro %}
+
+{% block content %}
+<h1 class="page-title">{{ title }}</h1>
+{% if error %}<div class="message message-error" role="alert">{{ error }}</div>{% endif %}
+
+{% if report %}
+<div class="card card-padded">
+  {% set counts = report.counts %}
+  <div class="import-summary" aria-label="Summary">
+    <span class="tag tag-add">{{ counts.add }} new</span>
+    <span class="tag tag-change">{{ counts.change }} changed</span>
+    <span class="tag tag-same">{{ counts.same }} unchanged</span>
+    {% if counts.error %}<span class="tag tag-error">{{ counts.error }} with errors</span>{% endif %}
+  </div>
+  {% if report.is_valid %}
+  <p class="import-note">Nothing has been saved yet. Check the rows below, then import.</p>
+  {% else %}
+  <p class="import-note" role="alert">Nothing has been saved. Fix these rows and upload the file again.</p>
+  {% endif %}
+  {% if report.ignored %}<p class="help import-note">Ignored columns: {{ report.ignored|join(", ") }}</p>{% endif %}
+
+  {% if report.is_valid %}
+  <form method="post" action="{{ post_url }}" enctype="multipart/form-data" class="submit-row import-note">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <textarea name="csv_text" hidden aria-hidden="true">{{ csv_text }}</textarea>
+    <button class="button button-primary" type="submit" name="_confirm" value="1">Import {{ counts.add + counts.change }} rows</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card import-preview">
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th scope="col">Line</th><th scope="col">Result</th>{% for column in report.columns %}<th scope="col">{{ column }}</th>{% endfor %}</tr>
+      </thead>
+      <tbody>
+        {% for row in preview %}
+        <tr>
+          <td>{{ row.line }}</td>
+          <td><span class="tag tag-{{ row.status }}">{{ {"add": "new", "change": "changed", "same": "unchanged", "error": "error"}[row.status] }}</span></td>
+          {% if row.errors %}
+          <td class="import-errors" colspan="{{ report.columns|length }}">{{ row.errors|join(" ") }}</td>
+          {% else %}
+          {% for cell in row.cells %}<td>{{ cell|truncate(80) }}</td>{% endfor %}
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if hidden_rows %}<p class="help card-empty">And {{ hidden_rows }} more rows.</p>{% endif %}
+</div>
+
+<div class="card card-padded">{{ upload_form(False) }}</div>
+{% else %}
+<div class="card card-padded narrow">
+  <p class="import-note">The first line names the columns: {{ columns|join(", ") }}. Add an {{ pk_label }} column to update existing records. You'll see a preview before anything is saved.</p>
+  {{ upload_form(True) }}
+</div>
+{% endif %}
+{% endblock %}

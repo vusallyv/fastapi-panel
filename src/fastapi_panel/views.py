@@ -273,6 +273,7 @@ def _render_changelist(
             "actions": actions,
             "editable": bool(editable),
             "can_add": admin.has_add_permission(request) and not in_trash,
+            "import_url": f"{list_url}/import" if admin.can_import(request) and not in_trash else None,
             "add_url": f"{list_url}/add",
             "post_url": request.url.path + (f"?{request.url.query}" if request.url.query else ""),
             "per_page": per_page,

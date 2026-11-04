@@ -5,6 +5,7 @@
   <h1 class="page-title">{{ title }}</h1>
   <div class="page-links">
     {% if trash_url %}<a class="button" href="{{ trash_url }}">Deleted</a>{% endif %}
+    {% if import_url %}<a class="button" href="{{ import_url }}">Import</a>{% endif %}
     {% if trash %}<a class="button" href="{{ list_url }}">&lsaquo; Back to {{ admin.name_plural.lower() }}</a>{% endif %}
     {% if can_add %}<a class="button button-primary" href="{{ add_url }}">+ Add {{ admin.name.lower() }}</a>{% endif %}
   </div>
