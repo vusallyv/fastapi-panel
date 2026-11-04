@@ -216,12 +216,12 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent);
 
 /* Tables */
 .table-wrap { overflow-x: auto; }
-.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table { width: 100%; border-collapse: collapse; font-size: 11px; }
 .table th, .table td {
   text-align: start; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle;
 }
 .table thead th {
-  font-size: 12px; font-weight: 650; color: var(--muted); background: var(--surface-alt); white-space: nowrap;
+  font-weight: 650; color: var(--muted); background: var(--surface-alt); white-space: nowrap;
 }
 .table thead th a { color: inherit; }
 .table thead th.sorted, .table thead th.sorted a { color: var(--accent); }
@@ -230,7 +230,7 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent);
 .table-list tbody tr:hover { background: var(--surface-alt); }
 .table-list tbody tr.selected { background: var(--accent-soft); }
 .table-list th, .table-list td { padding-block: 6px; }
-.table-list input:not([type="checkbox"]), .table-list select { width: 120px; min-height: 28px; padding: 3px 8px; }
+.table-list input:not([type="checkbox"]), .table-list select { width: 120px; min-height: 24px; padding: 2px 6px; }
 .align-end { text-align: end !important; white-space: nowrap; }
 .col-check { width: 36px; padding-inline-end: 0 !important; }
 .empty { text-align: center !important; padding: 40px 16px !important; color: var(--muted); }
