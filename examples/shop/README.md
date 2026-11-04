@@ -1,6 +1,6 @@
 # Example shop
 
-A small store with products, categories, tags, customers and orders. It uses most features: list editing, custom filters, date drill-down, fieldsets, inlines, autocomplete, custom actions and permissions.
+A small store with products, categories, tags, customers and orders. It uses most features: list editing, custom filters, date drill-down, fieldsets, inlines, autocomplete, the **+** button, image uploads, CSV import, soft delete with restore, custom actions and permissions.
 
 ```bash
 # from the repository root
@@ -9,7 +9,7 @@ cd examples/shop
 uv run uvicorn main:app --reload
 ```
 
-Open <http://127.0.0.1:8000/admin> and log in with `admin` / `admin`. The data is created on first start, in `shop.db`.
+Open <http://127.0.0.1:8000/admin> and log in with `admin` / `admin`. The data is created on first start, in `shop.db`, and uploads go to `media/`. If you ran an older version, delete `shop.db` first.
 
 - `models.py` has plain SQLAlchemy models
 - `admin.py` is the panel configuration, and the part worth reading

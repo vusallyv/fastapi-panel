@@ -74,6 +74,8 @@ class Product(Base):
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     stock: Mapped[int] = mapped_column(default=0)
     is_published: Mapped[bool] = mapped_column(default=False)
+    image: Mapped[str | None] = mapped_column(String(255))
+    deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"))
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
 

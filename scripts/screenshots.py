@@ -4,7 +4,10 @@ Needs the example running on :8765 and Chrome installed:
     uv run --with playwright python scripts/screenshots.py
 """
 
+import struct
 import sys
+import tempfile
+import zlib
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -13,9 +16,25 @@ BASE = "http://127.0.0.1:8765/admin"
 OUT = Path(__file__).parent.parent / "docs" / "screenshots"
 
 
+def sample_png(path: Path, size: int = 96) -> None:
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+    rows = b"".join(
+        b"\0" + bytes(value for x in range(size) for value in (12 + x, 107 + y // 2, 88 + (x + y) // 2))
+        for y in range(size)
+    )
+    header = struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0)
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
+    )
+
+
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     problems: list[str] = []
+    picture = Path(tempfile.mkdtemp()) / "lamp.png"
+    sample_png(picture)
 
     with sync_playwright() as p:
         browser = p.chromium.launch(channel="chrome", args=["--lang=en-US"])
@@ -89,6 +108,95 @@ def main() -> int:
 
         page.goto(f"{BASE}/order/1/delete")
         shot("delete")
+
+        # An image upload, with its preview and the thumbnail it leaves on the list.
+        page.goto(f"{BASE}/product/1/change")
+        page.set_input_files("#id_image", str(picture))
+        page.wait_for_selector("[data-file-preview]:not([hidden])")
+        shot("product-form", full_page=True)
+        page.click("button[name=_continue]")
+        page.wait_for_selector(".message-success")
+        page.goto(f"{BASE}/product?o=name")
+        thumbnail = page.locator("img.thumb").first
+        thumbnail.wait_for()
+        page.wait_for_function("document.querySelector('img.thumb').naturalWidth > 0")
+
+        # The + button on a dropdown, a two-column picker and an autocomplete.
+        page.goto(f"{BASE}/product/add")
+        page.locator("[data-related-add*='/category/add']").click()
+        dialog = page.frame_locator("dialog iframe")
+        dialog.locator("#id_name").fill("Lighting")
+        assert dialog.locator("#id_slug").input_value() == "lighting"
+        shot("related-popup")
+        dialog.locator("button[name=_save]").click()
+        page.wait_for_selector("dialog", state="detached")
+        chosen = page.locator("#id_category option:checked").inner_text()
+        assert chosen == "Lighting", chosen
+
+        page.locator("details.fieldset summary").click()
+        page.locator("[data-related-add*='/tag/add']").click()
+        page.frame_locator("dialog iframe").locator("#id_name").fill("Handmade")
+        page.frame_locator("dialog iframe").locator("button[name=_save]").click()
+        page.wait_for_selector("dialog", state="detached")
+        assert "Handmade" in page.locator(".dual-column").nth(1).inner_text(), "the new tag should be chosen"
+
+        page.locator("[data-related-add*='/category/add']").click()
+        page.frame_locator("dialog iframe").locator("[data-popup-cancel]").click()
+        page.wait_for_selector("dialog", state="detached")
+
+        page.goto(f"{BASE}/order/add")
+        page.locator("[data-related-add*='/customer/add']").first.click()
+        dialog = page.frame_locator("dialog iframe")
+        dialog.locator("#id_name").fill("Rina Aoki")
+        dialog.locator("#id_email").fill("rina@example.com")
+        dialog.locator("#id_country").fill("JP")
+        dialog.locator("button[name=_save]").click()
+        page.wait_for_selector("dialog", state="detached")
+        assert "Rina Aoki" in page.locator(".chip").first.inner_text()
+
+        # CSV import: a file with a mistake is refused, then the fixed file goes in.
+        page.goto(f"{BASE}/product")
+        page.click("text=Import")
+        bad = Path(picture).with_name("products-bad.csv")
+        bad.write_text("Name,Slug,Category,Price\nOak Stool,oak-stool,Home,not-a-price\n", encoding="utf-8")
+        page.set_input_files("#id_file", str(bad))
+        page.click("button:has-text('Check file')")
+        page.wait_for_selector(".tag-error")
+        assert page.locator("button[name=_confirm]").count() == 0
+        good = Path(picture).with_name("products.csv")
+        good.write_text(
+            "Name,Slug,Category,Price,Stock,Is published\n"
+            "Oak Stool,oak-stool,Home,89.00,12,True\nLinen Shade,linen-shade,Lighting,45.50,4,False\n"
+            "Clay Vase,clay-vase,Home,32.00,20,True\n",
+            encoding="utf-8",
+        )
+        page.set_input_files("#id_file", str(good))
+        page.click("button:has-text('Check file')")
+        page.wait_for_selector("button[name=_confirm]")
+        shot("import-preview")
+        page.click("button[name=_confirm]")
+        page.wait_for_selector(".message-success")
+        assert page.locator("text=Oak Stool").count() >= 1 or "3 added" in page.inner_text(".message-success")
+
+        # Soft delete: gone from the list, listed under Deleted, then back.
+        page.goto(f"{BASE}/product?q=oak")
+        page.locator("a.row-link").first.click()
+        page.click("a.button-danger")
+        assert "restore" in page.inner_text(".card")
+        page.click("button.button-danger")
+        page.wait_for_selector(".message-success")
+        page.goto(f"{BASE}/product?q=linen")
+        page.locator("a.row-link").first.click()
+        page.click("a.button-danger")
+        page.click("button.button-danger")
+        page.goto(f"{BASE}/product")
+        page.click("a:has-text('Deleted')")
+        page.wait_for_selector("button[name=_restore]")
+        assert page.locator("button[name=_restore]").count() == 2
+        shot("deleted")
+        page.locator("button[name=_restore]").first.click()
+        page.wait_for_selector(".message-success")
+        assert page.locator("button[name=_restore]").count() == 1
 
         page.goto(f"{BASE}/")
         shot("dashboard")

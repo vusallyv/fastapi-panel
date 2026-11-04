@@ -5,6 +5,8 @@ from models import Category, Customer, Order, OrderItem, OrderStatus, Product, S
 
 from fastapi_panel import (
     DecimalField,
+    ImageField,
+    LocalStorage,
     ModelAdmin,
     SimpleFilter,
     TabularInline,
@@ -17,6 +19,7 @@ from fastapi_panel import (
 
 site.title = "Acme Shop"
 site.header = "Acme Shop"
+site.storage = LocalStorage("media")
 
 
 class StockFilter(SimpleFilter):
@@ -34,7 +37,7 @@ class StockFilter(SimpleFilter):
 
 @register(Product)
 class ProductAdmin(ModelAdmin):
-    list_display = ("name", "category", "price", "stock", "is_published", "created_at")
+    list_display = ("name", "image", "category", "price", "stock", "is_published", "created_at")
     list_editable = ("stock", "is_published")
     list_filter = ("is_published", "category", StockFilter, "created_at")
     search_fields = ("name", "=slug", "category__name")
@@ -47,9 +50,14 @@ class ProductAdmin(ModelAdmin):
     readonly_fields = ("created_at",)
     save_as = True
     actions = ("publish", "unpublish")
-    field_overrides = {"price": DecimalField(min_value=Decimal(0), max_digits=10, decimal_places=2)}
+    soft_delete_field = "deleted_at"
+    csv_import = True
+    field_overrides = {
+        "price": DecimalField(min_value=Decimal(0), max_digits=10, decimal_places=2),
+        "image": ImageField(help_text="PNG, JPG, GIF or WEBP, up to 5 MB."),
+    }
     fieldsets = (
-        (None, {"fields": ("name", "slug", "category")}),
+        (None, {"fields": ("name", "slug", "category", "image")}),
         ("Pricing and stock", {"fields": (("price", "stock"), "is_published")}),
         ("Details", {"fields": ("description", "tags", "created_at"), "classes": ("collapse",)}),
     )
