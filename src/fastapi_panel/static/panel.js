@@ -291,6 +291,118 @@ function setupFileFields(root = document) {
   });
 }
 
+function setupRichText(root = document) {
+  const commands = [
+    ["B", "Bold", () => document.execCommand("bold")],
+    ["I", "Italic", () => document.execCommand("italic")],
+    ["U", "Underline", () => document.execCommand("underline")],
+    ["H2", "Heading", () => document.execCommand("formatBlock", false, "<h2>")],
+    ["H3", "Subheading", () => document.execCommand("formatBlock", false, "<h3>")],
+    ["¶", "Paragraph", () => document.execCommand("formatBlock", false, "<p>")],
+    ["• List", "Bulleted list", () => document.execCommand("insertUnorderedList")],
+    ["1. List", "Numbered list", () => document.execCommand("insertOrderedList")],
+    ["❝", "Quote", () => document.execCommand("formatBlock", false, "<blockquote>")],
+  ];
+
+  $$("textarea[data-richtext]", root).forEach((source) => {
+    source.hidden = true;
+    const box = document.createElement("div");
+    box.className = "rich";
+    const toolbar = document.createElement("div");
+    toolbar.className = "rich-toolbar";
+    toolbar.setAttribute("role", "toolbar");
+    const editor = document.createElement("div");
+    editor.className = "rich-content rich-editor";
+    editor.contentEditable = "true";
+    editor.setAttribute("role", "textbox");
+    editor.setAttribute("aria-multiline", "true");
+    // The server sanitizes this value before it gets here, and the CSP blocks scripts anyway.
+    editor.innerHTML = source.value;
+    const label = source.id && $(`label[for="${CSS.escape(source.id)}"]`);
+    if (label) {
+      editor.setAttribute("aria-label", label.textContent.trim());
+      label.addEventListener("click", () => editor.focus());
+    }
+
+    const sync = () => {
+      source.value = editor.innerHTML;
+    };
+    const run = (command) => {
+      editor.focus();
+      // shortcut: execCommand is deprecated but has no replacement short of shipping an editor library
+      document.execCommand("defaultParagraphSeparator", false, "p");
+      command();
+      sync();
+    };
+    const addButton = (text, title, handler) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "rich-button";
+      button.textContent = text;
+      button.title = title;
+      button.setAttribute("aria-label", title);
+      // Keeps the text selected while the button is pressed.
+      button.addEventListener("mousedown", (event) => event.preventDefault());
+      button.addEventListener("click", handler);
+      toolbar.append(button);
+    };
+    commands.forEach(([text, title, command]) => addButton(text, title, () => run(command)));
+
+    const linkBar = document.createElement("div");
+    linkBar.className = "rich-link";
+    linkBar.hidden = true;
+    const linkInput = document.createElement("input");
+    linkInput.type = "url";
+    linkInput.placeholder = "https://example.com";
+    linkInput.setAttribute("aria-label", "Link address");
+    const linkApply = document.createElement("button");
+    linkApply.type = "button";
+    linkApply.className = "button button-small";
+    linkApply.textContent = "Add link";
+    linkBar.append(linkInput, linkApply);
+
+    let selection = null;
+    const applyLink = () => {
+      const address = linkInput.value.trim();
+      linkBar.hidden = true;
+      linkInput.value = "";
+      if (!selection) return;
+      editor.focus();
+      const current = getSelection();
+      current.removeAllRanges();
+      current.addRange(selection);
+      if (address) {
+        const url = /^(https?:|mailto:)/i.test(address) ? address : `https://${address}`;
+        run(() => document.execCommand("createLink", false, url));
+      }
+    };
+    addButton("Link", "Link", () => {
+      const current = getSelection();
+      selection = current.rangeCount && editor.contains(current.anchorNode) ? current.getRangeAt(0) : null;
+      linkBar.hidden = !selection || !linkBar.hidden;
+      if (!linkBar.hidden) linkInput.focus();
+    });
+    addButton("Unlink", "Remove link", () => run(() => document.execCommand("unlink")));
+    linkApply.addEventListener("click", applyLink);
+    linkInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyLink();
+      }
+      if (event.key === "Escape") linkBar.hidden = true;
+    });
+
+    editor.addEventListener("input", sync);
+    editor.addEventListener("paste", (event) => {
+      // Pasted documents bring their own markup, so only the text comes along.
+      event.preventDefault();
+      document.execCommand("insertText", false, event.clipboardData.getData("text/plain"));
+    });
+    box.append(toolbar, linkBar, editor);
+    source.after(box);
+  });
+}
+
 function chooseCreated(button, id, label) {
   const box = button.closest("[data-related]");
   const search = $("[data-autocomplete]", box);
@@ -384,6 +496,7 @@ function setupInlines() {
       setupAutocomplete(row);
       setupDualSelects(row);
       setupFileFields(row);
+      setupRichText(row);
     });
 
     // Removed rows leave a gap in the numbering. The server skips blanks, so that's fine.
@@ -400,5 +513,6 @@ setupPrepopulate();
 setupAutocomplete();
 setupDualSelects();
 setupFileFields();
+setupRichText();
 setupInlines();
 setupRelatedAdd();

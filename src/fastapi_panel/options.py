@@ -20,12 +20,14 @@ from starlette.responses import Response
 
 from .filters import DateHierarchy, Filter, make_filter
 from .forms import (
+    SENSITIVE_NAME,
     Field,
     FileField,
     Form,
     ManyToManyField,
     ReadOnlyField,
     RelationField,
+    RichTextField,
     ValidationError,
     fields_for_model,
 )
@@ -39,8 +41,10 @@ from .introspect import (
     search_criterion,
     split_camel,
 )
+from .richtext import plain_text, safe_html
 
 MAX_CELL_LENGTH = 120
+MAX_LOGGED_VALUE = 200
 GROUP_NOISE = {"models", "model", "db", "database", "schemas", "tables", "entities", "app", "src", "__main__"}
 
 
@@ -138,6 +142,8 @@ class FormOptions:
     field_overrides: dict[str, Field] = {}
     form_schema: type[pydantic.BaseModel] | None = None
     empty_value_display = "-"
+    # Fields whose old and new values go into the history. Everything else only logs the field's name.
+    log_values: Iterable[str] = ()
     verbose_name: str | None = None
     verbose_name_plural: str | None = None
 
@@ -207,6 +213,9 @@ class FormOptions:
                 field.display = (
                     self.cell(obj, name, request) if obj is not None and persisted else self.empty_value_display
                 )
+                value = self.field_value(obj, name) if obj is not None and persisted else None
+                if isinstance(source, RichTextField) and value:
+                    field.display = Markup('<div class="rich-content">{}</div>').format(safe_html(value))
             else:
                 field = source.bind(name, prefix)
                 if isinstance(field, (RelationField, ManyToManyField)):
@@ -243,6 +252,17 @@ class FormOptions:
                 for error in exc.errors():
                     name = str(error["loc"][0]) if error["loc"] else None
                     form.add_error(ValidationError(error["msg"], field=name))
+
+    def logged_values(self, form: Form) -> str:
+        def show(field: Field, value: Any) -> str:
+            text = field.describe(value) or "(empty)"
+            return text if len(text) <= MAX_LOGGED_VALUE else text[: MAX_LOGGED_VALUE - 1] + "…"
+
+        return "; ".join(
+            f"{field.label}: {show(field, before)} → {show(field, after)}"
+            for field, before, after in form.diffs
+            if field.name in self.log_values
+        )
 
     def field_value(self, obj: Any, name: Any) -> Any:
         if callable(name):
@@ -286,6 +306,8 @@ class FormOptions:
         field = self._available_fields()[0].get(name) if isinstance(name, str) else None
         if isinstance(field, FileField) and value:
             return field.render(self.site, request, value)
+        if isinstance(field, RichTextField) and value:
+            value = plain_text(value)
         return format_value(
             value,
             self._display_attribute(name, "empty_value") or self.empty_value_display,
@@ -697,6 +719,10 @@ class ModelAdmin(FormOptions):
         for inline_class in self.inlines:
             inline_class(self).foreign_key()
         for options in (self, *[inline_class(self) for inline_class in self.inlines]):
+            for name in options.log_values:
+                field = options._available_fields()[0].get(name)
+                if field is None or SENSITIVE_NAME.search(name) or SENSITIVE_NAME.search(field.attr or ""):
+                    fail("log_values", name)
             if not self.site.storage and any(isinstance(f, FileField) for f in options._available_fields()[0].values()):
                 raise ImproperlyConfigured(
                     f"{type(options).__name__} has a file field, so the site needs a storage: "

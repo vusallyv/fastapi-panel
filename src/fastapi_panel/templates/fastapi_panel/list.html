@@ -31,6 +31,31 @@
     </nav>
     {% endif %}
 
+    {% if saved_filters or current_query %}
+    <div class="saved-filters">
+      {% if saved_filters %}<span class="muted">Saved:</span>{% endif %}
+      {% for saved in saved_filters %}
+      <form class="chip{% if saved.active %} chip-active{% endif %}" method="post" action="{{ list_url }}/filters">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="query" value="{{ current_query }}">
+        <a href="{{ saved.url }}"{% if saved.active %} aria-current="true"{% endif %}>{{ saved.name }}</a>
+        <button type="submit" name="_delete" value="{{ saved.id }}" aria-label="Delete saved filter {{ saved.name }}">&times;</button>
+      </form>
+      {% endfor %}
+      {% if current_query and not saved_filters|selectattr("active")|list %}
+      <details class="save-filter">
+        <summary>Save this view</summary>
+        <form method="post" action="{{ list_url }}/filters">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="query" value="{{ current_query }}">
+          <input name="name" maxlength="100" placeholder="Name" aria-label="Name for this saved filter" required>
+          <button class="button button-small" type="submit">Save</button>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+    {% endif %}
+
     <form method="post" action="{{ post_url }}" data-changelist>
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       {% if actions %}

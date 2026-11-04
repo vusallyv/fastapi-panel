@@ -1,0 +1,58 @@
+{% extends "fastapi_panel/base.html" %}
+{% block content %}
+<div class="page-head"><h1 class="page-title">{{ title }}</h1></div>
+
+<form class="activity-filters" method="get">
+  <label class="sr-only" for="activity-user">User</label>
+  <select id="activity-user" name="user">
+    <option value="">All users</option>
+    {% for user_id, label in users %}<option value="{{ user_id }}"{% if user_id == selected.user %} selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <label class="sr-only" for="activity-model">Model</label>
+  <select id="activity-model" name="model">
+    <option value="">All models</option>
+    {% for slug, admin in models.items() %}<option value="{{ slug }}"{% if slug == selected.model %} selected{% endif %}>{{ admin.name_plural }}</option>{% endfor %}
+  </select>
+  <label class="sr-only" for="activity-action">Action</label>
+  <select id="activity-action" name="action">
+    <option value="">All actions</option>
+    {% for name in actions %}<option value="{{ name }}"{% if name == selected.action %} selected{% endif %}>{{ name|capitalize }}</option>{% endfor %}
+  </select>
+  <button class="button" type="submit">Filter</button>
+  {% if any_filter %}<a href="{{ root }}/activity">Clear</a>{% endif %}
+</form>
+
+<div class="card">
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th scope="col">When ({{ site.timezone }})</th><th scope="col">User</th><th scope="col">Action</th><th scope="col">Model</th><th scope="col">Record</th><th scope="col">Details</th></tr></thead>
+      <tbody>
+        {% for entry in entries %}
+        <tr>
+          <td>{{ entry.created_at|log_time("%Y-%m-%d %H:%M:%S") }}</td>
+          <td>{{ entry.user_label }}</td>
+          <td><span class="tag tag-{{ entry.action }}">{{ entry.action }}</span></td>
+          <td>{{ models[entry.model].name_plural }}</td>
+          <td>{% if entry.action != "delete" %}<a href="{{ root }}/{{ entry.model }}/{{ entry.object_id|urlencode|replace('/', '%2F') }}/change">{{ entry.object_label }}</a>{% else %}{{ entry.object_label }}{% endif %}</td>
+          <td class="activity-details">{{ entry.message or "-" }}</td>
+        </tr>
+        {% else %}
+        <tr><td class="empty" colspan="6">Nothing recorded{% if any_filter %} for these filters{% endif %}.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="table-foot">
+    <span class="muted">{{ total }} entr{{ "y" if total == 1 else "ies" }}</span>
+    {% if last_page > 1 %}
+    <nav class="pagination" aria-label="Pages">
+      {% for item in pages %}
+        {% if item.number is none %}<span class="gap">&hellip;</span>
+        {% elif item.current %}<span class="current" aria-current="page">{{ item.number }}</span>
+        {% else %}<a href="{{ item.url }}">{{ item.number }}</a>{% endif %}
+      {% endfor %}
+    </nav>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from typing import Any
-from urllib.parse import quote, unquote, urlencode
+from urllib.parse import parse_qsl, quote, unquote, urlencode
 
 from sqlalchemy import func, inspect, or_, select
 from sqlalchemy.exc import DBAPIError
@@ -11,12 +11,17 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from .forms import Form
 from .introspect import coerce_to_column, object_label, pk_criterion, pk_keys, pk_string
-from .log import AdminLog, record
+from .log import AdminLog, SavedFilter, record
 from .options import InlineAdmin, ModelAdmin
 
 MAX_INLINE_ROWS = 1000
 AUTOCOMPLETE_RESULTS = 20
 MAX_RELATED_LISTED = 25
+ACTIVITY_ACTIONS = ("add", "change", "delete", "restore")
+ACTIVITY_PER_PAGE = 50
+MAX_ACTIVITY_USERS = 200
+MAX_SAVED_FILTERS = 50
+MAX_FILTER_QUERY = 2000
 DB_ERROR = "This couldn't be saved because it conflicts with existing data or a database constraint."
 
 
@@ -237,6 +242,7 @@ def _render_changelist(
 
     actions = admin.get_actions(request)
     list_url = f"{_root(request)}/{admin.slug}"
+    current_query = "" if in_trash else _filter_query(request.url.query)
     title = f"Deleted {admin.name_plural.lower()}" if in_trash else admin.name_plural
     crumbs = [("Home", f"{_root(request)}/"), (admin.name_plural, list_url if in_trash else None)]
     if in_trash:
@@ -250,6 +256,8 @@ def _render_changelist(
             "crumbs": crumbs,
             "trash": in_trash,
             "list_url": list_url,
+            "current_query": current_query,
+            "saved_filters": [] if in_trash else _saved_filters(session, request, admin, current_query),
             "trash_url": f"{list_url}/deleted" if admin.can_see_deleted(request) and not in_trash else None,
             "can_restore": in_trash and can_change,
             "headers": headers,
@@ -277,6 +285,115 @@ def _render_changelist(
             "add_url": f"{list_url}/add",
             "post_url": request.url.path + (f"?{request.url.query}" if request.url.query else ""),
             "per_page": per_page,
+        },
+    )
+
+
+def _filter_query(raw: str) -> str:
+    return urlencode([(key, value) for key, value in parse_qsl(raw) if key != "page"])
+
+
+def _saved_filters(session: Any, request: Any, admin: ModelAdmin, current: str) -> list[dict[str, Any]]:
+    stmt = (
+        select(SavedFilter)
+        .where(SavedFilter.user_id == admin.site.auth.user_id(request.state.user), SavedFilter.model == admin.slug)
+        .order_by(SavedFilter.name)
+    )
+    try:
+        saved = list(session.scalars(stmt))
+    except DBAPIError:
+        # The database user can't create the table, and the rest of the list still works without it.
+        session.rollback()
+        return []
+    list_url = f"{_root(request)}/{admin.slug}"
+    return [
+        {"id": item.id, "name": item.name, "url": f"{list_url}?{item.query}", "active": item.query == current}
+        for item in saved
+    ]
+
+
+def save_filter(session: Any, request: Any, admin: ModelAdmin) -> Response:
+    admin.require(admin.has_view_permission(request))
+    data = request.state.form
+    query = _filter_query(str(data.get("query", "")))
+    user_id = admin.site.auth.user_id(request.state.user)
+    mine = select(SavedFilter).where(SavedFilter.user_id == user_id, SavedFilter.model == admin.slug)
+    target = f"{_root(request)}/{admin.slug}" + (f"?{query}" if query else "")
+    name = str(data.get("name", "")).strip()[:100]
+    try:
+        if "_delete" in data:
+            found = session.scalars(mine.where(SavedFilter.id == _int_or_zero(data["_delete"]))).first()
+            if found is not None:
+                session.delete(found)
+        elif not name or not query or len(query) > MAX_FILTER_QUERY:
+            admin.message_user(request, "Give it a name, and apply a search or filter first.", "warning")
+        else:
+            found = session.scalars(mine.where(SavedFilter.name == name)).first()
+            if found is not None:
+                found.query = query
+            elif _count(session, mine) >= MAX_SAVED_FILTERS:
+                admin.message_user(request, f"You can keep up to {MAX_SAVED_FILTERS} saved filters here.", "warning")
+            else:
+                session.add(SavedFilter(user_id=user_id[:255], model=admin.slug, name=name, query=query))
+                admin.message_user(request, f"Saved “{name}”.")
+        session.commit()
+    except DBAPIError:
+        session.rollback()
+        admin.message_user(request, "Saved filters aren't available, their table is missing.", "error")
+    return redirect(target if len(target) <= MAX_FILTER_QUERY else f"{_root(request)}/{admin.slug}")
+
+
+def _int_or_zero(raw: Any) -> int:
+    return int(raw) if str(raw).isdigit() else 0
+
+
+def activity(session: Any, request: Any, site: Any) -> Response:
+    params = request.query_params
+    # Only entries about models this person may see, since a label can reveal what's in a record.
+    visible = {slug: admin for slug, admin in site._registry.items() if admin.has_view_permission(request)}
+    stmt = select(AdminLog).where(AdminLog.model.in_(visible))
+    model, user, action_name = params.get("model", ""), params.get("user", ""), params.get("action", "")
+    if model in visible:
+        stmt = stmt.where(AdminLog.model == model)
+    if user:
+        stmt = stmt.where(AdminLog.user_id == user)
+    if action_name in ACTIVITY_ACTIONS:
+        stmt = stmt.where(AdminLog.action == action_name)
+
+    total = _count(session, stmt)
+    last_page = max(1, math.ceil(total / ACTIVITY_PER_PAGE))
+    raw_page = params.get("page", "1")
+    page = min(int(raw_page), last_page) if raw_page.isdigit() and int(raw_page) > 0 else 1
+    entries = session.scalars(
+        stmt.order_by(AdminLog.created_at.desc(), AdminLog.id.desc())
+        .limit(ACTIVITY_PER_PAGE)
+        .offset((page - 1) * ACTIVITY_PER_PAGE)
+    )
+    users = session.execute(
+        select(AdminLog.user_id, AdminLog.user_label)
+        .where(AdminLog.model.in_(visible))
+        .distinct()
+        .order_by(AdminLog.user_label)
+        .limit(MAX_ACTIVITY_USERS)
+    )
+    return site.render(
+        request,
+        "fastapi_panel/activity.html",
+        {
+            "title": "Activity",
+            "crumbs": [("Home", f"{_root(request)}/"), ("Activity", None)],
+            "entries": list(entries),
+            "models": visible,
+            "users": list(users),
+            "actions": ACTIVITY_ACTIONS,
+            "selected": {"model": model, "user": user, "action": action_name},
+            "total": total,
+            "pages": [
+                {"number": n, "url": _query_url(request, page=n) if n else None, "current": n == page}
+                for n in _page_numbers(page, last_page)
+            ],
+            "last_page": last_page,
+            "any_filter": bool(model or user or action_name),
         },
     )
 
@@ -351,7 +468,9 @@ def _save_list_editable(session: Any, request: Any, admin: ModelAdmin) -> Respon
             if changed:
                 admin.save_model(session, request, form.obj, True)
                 session.flush()
-                record(session, request, admin, form.obj, "change", ", ".join(changed))
+                values = admin.logged_values(form)
+                message = ", ".join(changed) + (f". {values}" if values else "")
+                record(session, request, admin, form.obj, "change", message)
                 saved += 1
         session.commit()
     except DBAPIError:
@@ -458,7 +577,11 @@ class FormSet:
                 changed = row["form"].apply(row["obj"])
                 if changed:
                     self.inline.save_model(self.session, self.request, row["obj"], True)
-                    notes.append(f"Changed {', '.join(changed).lower()} on {self.inline.name.lower()} “{row['label']}”")
+                    values = self.inline.logged_values(row["form"])
+                    notes.append(
+                        f"Changed {', '.join(changed).lower()} on {self.inline.name.lower()} “{row['label']}”"
+                        + (f" ({values})" if values else "")
+                    )
             else:
                 child = self.inline.model()
                 row["form"].apply(child)
@@ -506,7 +629,8 @@ def change_form(session: Any, request: Any, admin: ModelAdmin, pk: str | None = 
                 message = ""
                 if not creating:
                     parts = [f"Changed {', '.join(changed).lower()}"] if changed else []
-                    message = ". ".join([*parts, *notes])
+                    values = admin.logged_values(form)
+                    message = ". ".join([*parts, *([values] if values else []), *notes])
                 else:
                     message = ". ".join(notes)
                 record(session, request, admin, target, "add" if creating else "change", message)

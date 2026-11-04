@@ -21,6 +21,7 @@ from sqlalchemy.orm import MANYTOMANY, MANYTOONE
 from starlette.datastructures import UploadFile
 
 from .introspect import coerce_to_column, humanize, object_label
+from .richtext import plain_text, sanitize_html
 
 SENSITIVE_NAME = re.compile(r"password|passwd|secret|token|api_?key|private_?key", re.I)
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -109,6 +110,12 @@ class Field:
     def to_python(self, raw: str) -> Any:
         return raw
 
+    def describe(self, formatted: Any) -> str:
+        """How a value reads in the history, when `log_values` asks to keep it."""
+        labels = dict(getattr(self, "choices", []))
+        values = formatted if isinstance(formatted, list) else [formatted]
+        return ", ".join(str(labels.get(value, value)) for value in values)
+
     def clean(self, raw: Any) -> Any:
         if isinstance(raw, str):
             raw = raw.strip()
@@ -137,6 +144,27 @@ class CharField(Field):
 
 class TextField(CharField):
     widget = "textarea"
+
+
+class RichTextField(TextField):
+    """Formatted text, stored as HTML. Only a small set of tags survives, whatever gets submitted."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.attrs = {"data-richtext": "", **self.attrs}
+
+    def format(self, value: Any) -> str:
+        return sanitize_html(value) if value else ""
+
+    def extract(self, data: Any) -> str:
+        return self.format(data.get(self.html_name, ""))
+
+    def clean(self, raw: Any) -> Any:
+        # An editor left empty still holds markup such as <br>.
+        return super().clean(raw if plain_text(raw).strip() else "")
+
+    def describe(self, formatted: Any) -> str:
+        return plain_text(formatted)
 
 
 class EmailField(CharField):
@@ -216,6 +244,9 @@ class BooleanField(Field):
 
     def format(self, value: Any) -> str:
         return "on" if value else ""
+
+    def describe(self, formatted: Any) -> str:
+        return "Yes" if formatted else "No"
 
     def clean(self, raw: Any) -> bool:
         return bool(raw)
@@ -551,6 +582,7 @@ class Form:
         self.cleaned: dict[str, Any] = {}
         self.fieldsets: list[dict[str, Any]] = []
         self.delete_requested = False
+        self.diffs: list[tuple[Field, Any, Any]] = []
         for field in self.editable:
             source = field.read(obj) if persisted else field.initial
             field.value = field.format(source)
@@ -604,8 +636,10 @@ class Form:
                 continue
             before = field.format(field.read(obj)) if self.persisted else None
             field.write(obj, value)
-            if self.persisted and before != field.format(value):
+            after = field.format(value)
+            if self.persisted and before != after:
                 changed.append(field.label)
+                self.diffs.append((field, before, after))
         return changed
 
 

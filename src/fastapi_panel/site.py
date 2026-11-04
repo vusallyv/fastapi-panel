@@ -32,13 +32,14 @@ from starlette.staticfiles import StaticFiles
 
 from . import __version__, imports, views
 from .db import Database
-from .log import AdminLog
+from .log import AdminLog, SavedFilter
+from .log import Base as PanelBase
 from .options import ImproperlyConfigured, ModelAdmin
 from .security import SECURITY_HEADERS, BodyTooLarge, LimitBody, LoginThrottle, Signer
 from .storage import Storage
 
 COOKIE_NAME = "fastapi_panel_session"
-RESERVED_SLUGS = {"login", "logout", "password", "static", "files", "forgot-password", "reset-password"}
+RESERVED_SLUGS = {"login", "logout", "password", "static", "files", "forgot-password", "reset-password", "activity"}
 RESET_LINK_AGE = 3600
 logger = logging.getLogger("fastapi_panel")
 INLINE_FILE_TYPES = {"png", "jpg", "jpeg", "gif", "webp"}
@@ -73,7 +74,7 @@ class AdminSite:
         self.storage = storage
         self._registry: dict[str, ModelAdmin] = {}
         self._pages: list[dict[str, Any]] = []
-        self._log_table_ready = not audit_log
+        self._tables_ready = False
         self.templates = Environment(
             loader=ChoiceLoader(
                 [FileSystemLoader([str(d) for d in template_dirs]), PackageLoader("fastapi_panel", "templates")]
@@ -210,6 +211,9 @@ class AdminSite:
         self.reset_throttle = LoginThrottle(max_attempts=3, window=RESET_LINK_AGE)
         for admin in self._registry.values():
             admin.check()
+        if self.audit_log and not any(page["path"] == "/activity" for page in self._pages):
+            activity = self.page("/activity", title="Activity", group="System", permission="activity.view")
+            activity(lambda session, request: views.activity(session, request, self))
         panel = Starlette(
             routes=self._routes(),
             exception_handlers={404: self._not_found},
@@ -238,6 +242,7 @@ class AdminSite:
             self._route("/{slug}/add", self._model_view(views.change_form), methods=["GET", "POST"]),
             self._route("/{slug}/autocomplete", self._model_view(views.autocomplete)),
             self._route("/{slug}/deleted", self._model_view(views.trash), methods=["GET", "POST"]),
+            self._route("/{slug}/filters", self._model_view(views.save_filter), methods=["POST"]),
             self._route("/{slug}/import", self._model_view(imports.import_view), methods=["GET", "POST"]),
             self._route("/{slug}/{pk}/change", self._object_view(views.change_form), methods=["GET", "POST"]),
             self._route("/{slug}/{pk}/delete", self._object_view(views.delete_view), methods=["GET", "POST"]),
@@ -278,7 +283,7 @@ class AdminSite:
         try:
             if request.method == "POST":
                 await self._guard_post(request)
-            await self._ensure_log_table()
+            await self._ensure_tables()
             await self._load_user(request)
             if request.state.user is None and not public:
                 response: Response = self._redirect_to_login(request)
@@ -364,19 +369,20 @@ class AdminSite:
             return
         request.state.user = user
 
-    async def _ensure_log_table(self) -> None:
-        if self._log_table_ready:
+    async def _ensure_tables(self) -> None:
+        if self._tables_ready:
             return
 
         def create(session: Any) -> None:
-            AdminLog.__table__.create(session.connection(), checkfirst=True)
+            tables = [SavedFilter.__table__, *([AdminLog.__table__] if self.audit_log else [])]
+            PanelBase.metadata.create_all(session.connection(), tables=tables)
             session.commit()
 
         try:
             await self.db.run(create)
         except DBAPIError:
             pass  # Another worker won the race, or the table is managed by migrations.
-        self._log_table_ready = True
+        self._tables_ready = True
 
     def _redirect_to_login(self, request: Request) -> Response:
         root = request.scope["root_path"]

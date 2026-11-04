@@ -16,6 +16,7 @@ from .forms import (
     ImageField,
     IntegerField,
     JSONField,
+    RichTextField,
     TextField,
     TimeField,
     UUIDField,
@@ -31,6 +32,7 @@ from .options import (
     action,
     display,
 )
+from .richtext import sanitize_html
 from .security import hash_password, verify_password
 from .site import AdminSite, autodiscover, register, site
 from .storage import LocalStorage, Storage
@@ -58,6 +60,7 @@ __all__ = [
     "LocalStorage",
     "ModelAdmin",
     "ModelAuth",
+    "RichTextField",
     "SimpleFilter",
     "StackedInline",
     "StaticAuth",
@@ -72,6 +75,7 @@ __all__ = [
     "display",
     "hash_password",
     "register",
+    "sanitize_html",
     "site",
     "verify_password",
 ]

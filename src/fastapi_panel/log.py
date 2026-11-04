@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
-from sqlalchemy import DateTime, Index, String, Text
+from sqlalchemy import DateTime, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from .introspect import object_label, pk_string
@@ -32,6 +32,17 @@ class AdminLog(Base):
     action: Mapped[str] = mapped_column(String(10))
     # Field names only. Values stay out of the log so it never collects sensitive data.
     message: Mapped[str] = mapped_column(Text, default="")
+
+
+class SavedFilter(Base):
+    __tablename__ = "fastapi_panel_saved_filter"
+    __table_args__ = (UniqueConstraint("user_id", "model", "name", name="uq_fastapi_panel_saved_filter"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(255))
+    model: Mapped[str] = mapped_column(String(100))
+    name: Mapped[str] = mapped_column(String(100))
+    query: Mapped[str] = mapped_column(Text)
 
 
 def record(session: Any, request: Any, admin: Any, obj: Any, action: str, message: str = "") -> None:
