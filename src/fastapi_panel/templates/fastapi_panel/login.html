@@ -4,12 +4,14 @@
   <form class="login-card" method="post" action="{{ root }}/login{% if next %}?next={{ next|urlencode }}{% endif %}">
     <h1>{{ site.header }}</h1>
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% for message in messages %}<div class="message message-{{ message.level }}" role="status">{{ message.text }}</div>{% endfor %}
     {% if error %}<div class="message message-error" role="alert">{{ error }}</div>{% endif %}
     <label for="username">Username</label>
     <input id="username" name="username" value="{{ username }}" autocomplete="username" autofocus required>
     <label for="password">Password</label>
     <input id="password" name="password" type="password" autocomplete="current-password" required>
     <button class="button button-primary" type="submit">Log in</button>
+    {% if site.password_reset %}<a class="login-link" href="{{ root }}/forgot-password">Forgot your password?</a>{% endif %}
   </form>
 </main>
 {% endblock %}

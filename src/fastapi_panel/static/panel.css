@@ -392,6 +392,7 @@ details.fieldset:not([open]) > summary { border-bottom: 0; border-radius: var(--
 .login-card input { max-width: none; }
 .login-card .button { margin-top: 12px; }
 .login-card .message { margin-bottom: 4px; }
+.login-link { margin-top: 8px; text-align: center; font-size: 13px; }
 
 @media (max-width: 1000px) {
   .changelist.has-filters, .dashboard { grid-template-columns: minmax(0, 1fr); }

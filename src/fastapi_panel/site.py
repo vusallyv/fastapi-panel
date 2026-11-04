@@ -4,6 +4,7 @@ import datetime as dt
 import hmac
 import importlib
 import inspect as inspect_module
+import logging
 import mimetypes
 import pkgutil
 import re
@@ -20,6 +21,7 @@ from jinja2 import ChoiceLoader, Environment, FileSystemLoader, PackageLoader, s
 from sqlalchemy import inspect, select
 from sqlalchemy.exc import DBAPIError
 from starlette.applications import Starlette
+from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
@@ -36,7 +38,9 @@ from .security import SECURITY_HEADERS, BodyTooLarge, LimitBody, LoginThrottle, 
 from .storage import Storage
 
 COOKIE_NAME = "fastapi_panel_session"
-RESERVED_SLUGS = {"login", "logout", "password", "static", "files"}
+RESERVED_SLUGS = {"login", "logout", "password", "static", "files", "forgot-password", "reset-password"}
+RESET_LINK_AGE = 3600
+logger = logging.getLogger("fastapi_panel")
 INLINE_FILE_TYPES = {"png", "jpg", "jpeg", "gif", "webp"}
 FILE_CSP = "default-src 'none'; sandbox"
 MIN_SECRET_LENGTH = 32
@@ -180,21 +184,30 @@ class AdminSite:
         secure_cookies: bool | None = None,
         trusted_origins: Iterable[str] = (),
         max_body_size: int = 10 * 1024 * 1024,
+        password_reset: Callable[[Any, str], Any] | None = None,
+        public_url: str | None = None,
     ) -> None:
         if len(secret_key) < MIN_SECRET_LENGTH:
             raise ValueError(
                 f"secret_key must be at least {MIN_SECRET_LENGTH} characters. "
                 'Generate one: python -c "import secrets; print(secrets.token_urlsafe(48))"'
             )
+        if password_reset and not (public_url or "").startswith(("https://", "http://")):
+            # Links can't come from the request: its Host header would let an attacker email links to their own site.
+            raise ValueError('password_reset needs public_url, the panel\'s address: "https://example.com/admin"')
+        self.password_reset = password_reset if auth.can_change_password else None
+        self.public_url = (public_url or "").rstrip("/")
         self.db = Database(engine)
         self.auth = auth
         self.signer = Signer(secret_key)
         self.file_signer = Signer(secret_key, salt="files")
+        self.reset_signer = Signer(secret_key, salt="password-reset")
         self.session_age = session_age
         self.secure_cookies = secure_cookies
         self.trusted_origins = set(trusted_origins)
         self.max_body_size = max_body_size
         self.throttle = LoginThrottle()
+        self.reset_throttle = LoginThrottle(max_attempts=3, window=RESET_LINK_AGE)
         for admin in self._registry.values():
             admin.check()
         panel = Starlette(
@@ -211,6 +224,8 @@ class AdminSite:
             self._route("/logout", self._logout, methods=["POST"]),
             self._route("/password", self._change_password, methods=["GET", "POST"]),
             self._route("/files/{token}", self._serve_file),
+            self._route("/forgot-password", self._forgot_password, methods=["GET", "POST"], public=True),
+            self._route("/reset-password/{token}", self._reset_password, methods=["GET", "POST"], public=True),
             Mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static"),
         ]
         for page in self._pages:
@@ -549,17 +564,85 @@ class AdminSite:
             elif new != form.get("confirm", ""):
                 errors["confirm"] = "The two passwords don't match."
             if not errors:
-                hashed_user = await self.db.run(self._store_password, request, new)
+                hashed_user = await self.db.run(self._store_password, self.auth.user_id(request.state.user), new)
                 request.state.session["hash"] = self.auth.session_hash(hashed_user)
                 self.message(request, "Your password was changed.")
                 return RedirectResponse(f"{request.scope['root_path']}/", status_code=303)
         return self.render(request, "fastapi_panel/password.html", {"title": "Change password", "errors": errors})
 
-    def _store_password(self, session: Any, request: Request, password: str) -> Any:
-        user = self.auth.get_user(session, self.auth.user_id(request.state.user))
+    def _store_password(self, session: Any, user_id: str, password: str) -> Any:
+        user = self.auth.get_user(session, user_id)
         self.auth.set_password(session, user, password)
         session.commit()
         return user
+
+    async def _forgot_password(self, request: Request) -> Response:
+        if not self.password_reset:
+            raise HTTPException(404, "Not found.")
+        sent = request.method == "POST"
+        task = None
+        if sent:
+            username = str(request.state.form.get("username", ""))[:255]
+            client = request.client.host if request.client else "unknown"
+            key = f"{client}|{username.lower()}"
+            # The answer is the same for every username, so this page can't reveal who has an account.
+            if not self.reset_throttle.blocked(key):
+                self.reset_throttle.fail(key)
+                user = await self.db.run(self.auth.find_user, username)
+                if user is not None and self.auth.is_allowed(user):
+                    task = BackgroundTask(self._send_reset_link, user)
+        response = self.render(request, "fastapi_panel/forgot_password.html", {"title": "Reset password", "sent": sent})
+        response.background = task
+        return response
+
+    async def _send_reset_link(self, user: Any) -> None:
+        token = self.reset_signer.dumps(
+            {
+                "uid": self.auth.user_id(user),
+                "hash": self.auth.session_hash(user),
+                "exp": time.time() + RESET_LINK_AGE,
+            }
+        )
+        url = f"{self.public_url}/reset-password/{token}"
+        try:
+            if inspect_module.iscoroutinefunction(self.password_reset):
+                await self.password_reset(user, url)
+            else:
+                await run_in_threadpool(self.password_reset, user, url)
+        except Exception:
+            logger.exception("Couldn't send a password reset link")
+
+    async def _reset_password(self, request: Request) -> Response:
+        if not self.password_reset:
+            raise HTTPException(404, "Not found.")
+        user = await self._user_from_reset_token(request.path_params["token"])
+        if user is None:
+            raise HTTPException(400, "This link has expired or was already used. Request a new one.")
+        errors: dict[str, str] = {}
+        if request.method == "POST":
+            form = request.state.form
+            new = str(form.get("new", ""))[:MAX_PASSWORD_LENGTH]
+            if len(new) < MIN_PASSWORD_LENGTH:
+                errors["new"] = f"Use at least {MIN_PASSWORD_LENGTH} characters."
+            elif new != form.get("confirm", ""):
+                errors["confirm"] = "The two passwords don't match."
+            if not errors:
+                # The token holds a hash of the old password, so this also uses the link up.
+                await self.db.run(self._store_password, self.auth.user_id(user), new)
+                self.message(request, "Your password was changed. Log in with the new one.")
+                return RedirectResponse(f"{request.scope['root_path']}/login", status_code=303)
+        return self.render(
+            request, "fastapi_panel/reset_password.html", {"title": "Choose a new password", "errors": errors}
+        )
+
+    async def _user_from_reset_token(self, token: str) -> Any | None:
+        payload = self.reset_signer.loads(token)
+        if not isinstance(payload, dict) or payload.get("exp", 0) < time.time():
+            return None
+        user = await self.db.run(self.auth.get_user, str(payload.get("uid", "")))
+        if user is None or not self.auth.is_allowed(user):
+            return None
+        return user if hmac.compare_digest(self.auth.session_hash(user), str(payload.get("hash", ""))) else None
 
 
 def _is_popup(request: Request) -> bool:
