@@ -97,6 +97,23 @@ def main() -> int:
         assert page.locator("[data-nav-item]:visible").count() == 0, "the Add links shouldn't match the model filter"
         page.fill("[data-nav-filter]", "prod")
         assert page.locator("[data-nav-item]:visible").count() == 1
+        page.fill("[data-nav-filter]", "")
+
+        access = page.locator('[data-nav-group="Access"]')
+
+        def is_open() -> bool:
+            return access.evaluate("group => group.open")
+
+        access.locator("summary").click()
+        assert not is_open(), "clicking a group title should collapse it"
+        page.reload()
+        assert not is_open(), "a collapsed group should stay collapsed"
+        page.fill("[data-nav-filter]", "staff")
+        assert is_open() and page.locator("[data-nav-item]:visible").count() == 1, "the filter should reveal matches"
+        page.fill("[data-nav-filter]", "")
+        assert not is_open(), "clearing the filter should restore the group"
+        page.goto(f"{BASE}/staff")
+        assert is_open(), "the current page's group should always be open"
 
         page.click("[data-toggle-theme]")
         page.goto(f"{BASE}/product")

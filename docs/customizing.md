@@ -23,7 +23,7 @@ autodiscover("app")
 site.mount(app, engine=engine, auth=auth, secret_key=key)
 ```
 
-The sidebar groups models by module, so these show up as "Billing" and "Catalog". Set `group = "Finance"` on a `ModelAdmin` to choose the name yourself.
+The sidebar groups models by module, so these show up as "Billing" and "Catalog". Set `group = "Finance"` on a `ModelAdmin` to choose the name yourself. Click a group's title to collapse it, and it stays collapsed in that browser.
 
 A reusable package can ship its own admin the same way. Your app calls `autodiscover("that_package")`, and if you want a different configuration, unregister and register again:
 

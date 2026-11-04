@@ -109,7 +109,16 @@ ul { list-style: none; margin: 0; padding: 0; }
 .nav-title {
   padding: 6px 12px; background: var(--accent); color: var(--on-accent);
   font-size: 12px; font-weight: 650; letter-spacing: .02em;
+  display: flex; align-items: center; justify-content: space-between; cursor: pointer; list-style: none;
 }
+.nav-title::-webkit-details-marker { display: none; }
+.nav-title::after {
+  content: ""; width: 6px; height: 6px; margin-inline-end: 2px;
+  border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: translateY(-1px) rotate(45deg);
+}
+.nav-group:not([open]) > .nav-title::after { transform: rotate(-45deg); }
+.nav-title:hover { background: var(--accent-hover); }
+.nav-title:focus-visible { outline-color: var(--on-accent); outline-offset: -3px; }
 .nav-item { display: flex; align-items: center; border-top: 1px solid var(--border); }
 .nav-item a { padding: 7px 12px; color: var(--text); }
 .nav-item > a:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }

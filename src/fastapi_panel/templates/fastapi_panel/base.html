@@ -20,8 +20,8 @@
     <input class="nav-search" type="search" placeholder="Find a model" aria-label="Find a model" data-nav-filter>
     <nav aria-label="Models">
       {% for group in nav %}
-      <div class="nav-group" data-nav-group>
-        <p class="nav-title">{{ group.name }}</p>
+      <details class="nav-group" data-nav-group="{{ group.name }}" open>
+        <summary class="nav-title">{{ group.name }}</summary>
         <ul>
           {% for item in group["items"] %}
           <li class="nav-item{% if item.active %} active{% endif %}" data-nav-item>
@@ -30,7 +30,7 @@
           </li>
           {% endfor %}
         </ul>
-      </div>
+      </details>
       {% endfor %}
     </nav>
     </div>

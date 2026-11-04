@@ -3,6 +3,20 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
+function loadCollapsedGroups() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem("fastapi-panel-nav-collapsed")));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveCollapsedGroups(collapsed) {
+  try {
+    localStorage.setItem("fastapi-panel-nav-collapsed", JSON.stringify([...collapsed]));
+  } catch {}
+}
+
 function setupChrome() {
   $("[data-toggle-theme]")?.addEventListener("click", () => {
     const root = document.documentElement;
@@ -19,14 +33,31 @@ function setupChrome() {
     $("#sidebar").classList.toggle("open");
   });
 
+  const groups = $$("[data-nav-group]");
+  const collapsed = loadCollapsedGroups();
+  const restoreGroup = (group) => {
+    group.open = !collapsed.has(group.dataset.navGroup) || $(".nav-item.active", group) !== null;
+  };
+  groups.forEach((group) => {
+    restoreGroup(group);
+    $("summary", group).addEventListener("click", () => {
+      // The click fires before the group toggles, so it's still in its old state here.
+      if (group.open) collapsed.add(group.dataset.navGroup);
+      else collapsed.delete(group.dataset.navGroup);
+      saveCollapsedGroups(collapsed);
+    });
+  });
+
   $("[data-nav-filter]")?.addEventListener("input", (event) => {
     const term = event.target.value.toLowerCase();
-    $$("[data-nav-group]").forEach((group) => {
+    groups.forEach((group) => {
       const items = $$("[data-nav-item]", group);
       items.forEach((item) => {
         item.hidden = !$("a", item).textContent.toLowerCase().includes(term);
       });
       group.hidden = items.every((item) => item.hidden);
+      if (term) group.open = true;
+      else restoreGroup(group);
     });
   });
 }
