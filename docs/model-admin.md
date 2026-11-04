@@ -242,7 +242,16 @@ class ProductAdmin(ModelAdmin):
 
 The panel commits for you. Return a `Response` to send something else back, such as a file. `delete_selected` and `export_csv` are included. Change that with `builtin_actions = ()`, choose the exported columns with `export_fields`, and adjust the limit with `action_max_rows` (10,000 by default).
 
-Deletes follow your SQLAlchemy cascades. The confirmation page lists what `cascade="..."` on your relationships will remove. A database-level `ON DELETE CASCADE` works but isn't listed, and a foreign key that blocks a delete shows an error message. `delete_selected` loads the rows and calls `delete_model` on each, so your hooks and cascades run.
+Before anything is deleted, a confirmation page shows a collapsible tree of everything that goes with it, with a count per model and a link to each record the user can open:
+
+- Rows removed by `cascade="..."` on your relationships or by `ON DELETE CASCADE` in the database are listed, at every level.
+- Many-to-many rows are listed as links. Only the link is removed, not the record on the other side.
+- Rows kept by `ON DELETE SET NULL`, or by a relationship that clears a nullable foreign key, aren't listed.
+- Rows that stop the delete, such as a required foreign key with no cascade, appear in a red section that replaces the delete button.
+
+Records the user can't reach through that model's own admin are shown as "Hidden" without their label. Models with no admin show their label with no link. The check stops after 5,000 related rows and says so on the page, and the database can still refuse the delete, which shows an error message.
+
+A custom `delete_model` isn't blocked up front, since it may handle dependent rows itself or keep the row. Soft deletes list nothing, because no related rows change. `delete_selected` loads the rows and calls `delete_model` on each, so your hooks and cascades run.
 
 ## Filters
 

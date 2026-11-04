@@ -64,7 +64,7 @@ Want to try it first? The [example shop](https://github.com/zaman-labs/fastapi-p
 | **Files and images** | Uploads with previews and thumbnails, stored on disk or anywhere else through a small storage class |
 | **Import and restore** | CSV import with a preview before anything is saved, and a Deleted page to restore soft-deleted records |
 | **Inlines** | Tabular and stacked, with add, edit and delete on the parent's page |
-| **Actions** | Your own bulk actions, plus delete with a summary of what cascades, CSV export and "select all across pages" |
+| **Actions** | Your own bulk actions, plus delete with a tree of what cascades and what blocks it, CSV export and "select all across pages" |
 | **Accounts and permissions** | Per model and per action, row-level through `get_queryset` and `has_*_permission`, with password reset by email |
 | **Audit log** | Who changed which fields and when, on each record's history and a site-wide Activity page, with old and new values for the fields you choose |
 | **Any SQLAlchemy setup** | Sync and async engines, SQLModel, composite primary keys |

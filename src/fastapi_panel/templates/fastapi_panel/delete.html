@@ -1,25 +1,65 @@
 {% extends "fastapi_panel/base.html" %}
+{% macro record(row) %}{% if row.url %}<a href="{{ row.url }}">{{ row.label }}</a>{% else %}{{ row.label }}{% endif %}{% endmacro %}
+{% macro groups(items) %}
+<ul class="delete-tree">
+  {% for group in items %}
+  <li>
+    <details open>
+      <summary>
+        <strong>{{ group.name }}</strong>
+        <span class="tag {{ 'tag-same' if group.link else 'tag-delete' }}">{{ group.count }}</span>
+        {% if group.link %}<span class="muted">Only the links are removed</span>{% endif %}
+      </summary>
+      {{ rows(group.rows, group.count, group.link) }}
+    </details>
+  </li>
+  {% endfor %}
+</ul>
+{% endmacro %}
+{% macro rows(items, count, link=False) %}
+<ul class="delete-tree">
+  {% for row in items %}
+  <li>
+    {% if row.groups %}
+    <details open><summary>{{ record(row) }}</summary>{{ groups(row.groups) }}</details>
+    {% else %}
+    <span class="delete-leaf">{% if link %}Link to {% endif %}{{ record(row) }}</span>
+    {% endif %}
+  </li>
+  {% endfor %}
+  {% if count > items|length %}<li><span class="delete-leaf muted">and {{ count - items|length }} more</span></li>{% endif %}
+</ul>
+{% endmacro %}
 {% block content %}
 <h1 class="page-title">{{ title }}</h1>
-<div class="card card-padded">
+<div class="card card-padded delete-page">
+  {% if plan.blocked %}
+  <div class="delete-blocked" role="alert">
+    <h2>This can't be deleted yet</h2>
+    <p>These records depend on it. Delete them or point them somewhere else first.</p>
+    {{ groups(plan.blocked) }}
+  </div>
+  {% else %}
   <p>{% if soft %}You can restore these later from Deleted. These will be deleted:{% else %}This can't be undone. These will be deleted:{% endif %}</p>
-  <ul class="delete-list">
-    {% for label in labels %}<li>{{ label }}</li>{% endfor %}
-    {% if extra_count %}<li class="muted">and {{ extra_count }} more</li>{% endif %}
-  </ul>
-  {% if related %}
-  <p>Along with their related records:</p>
-  <ul class="delete-list">
-    {% for entry in related %}
-    <li><strong>{{ entry.name }}</strong> ({{ entry.count }}): {{ entry["items"]|join(", ") }}{% if entry.count > entry["items"]|length %}, &hellip;{% endif %}</li>
-    {% endfor %}
+  {% if plan.summary %}
+  <ul class="delete-summary">
+    {% for entry in plan.summary %}<li{% if entry.link %} class="delete-summary-link"{% endif %}>{{ entry.name }}: <strong>{{ entry.count }}</strong></li>{% endfor %}
   </ul>
   {% endif %}
+  {{ rows(plan.roots, plan.roots|length + (extra_count or 0)) }}
+  {% endif %}
+  {% if plan.truncated %}
+  <p class="muted">There are too many related records to check them all, so the real numbers may be higher and the database may still refuse this delete.</p>
+  {% endif %}
+  {% if plan.blocked %}
+  <div class="submit-row"><a class="button" href="{{ cancel_url }}">Go back</a></div>
+  {% else %}
   <form method="post" action="{{ post_url }}" class="submit-row">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     {% for name, value in hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
     <button class="button button-danger" type="submit">Yes, delete</button>
     <a class="button" href="{{ cancel_url }}">Cancel</a>
   </form>
+  {% endif %}
 </div>
 {% endblock %}

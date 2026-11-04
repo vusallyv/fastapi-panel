@@ -4,19 +4,31 @@ import math
 from typing import Any
 from urllib.parse import parse_qsl, quote, unquote, urlencode
 
-from sqlalchemy import func, inspect, or_, select
+from sqlalchemy import and_, func, inspect, or_, select
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.orm import MANYTOONE
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from .forms import Form
-from .introspect import coerce_to_column, object_label, pk_criterion, pk_keys, pk_string
+from .introspect import (
+    coerce_to_column,
+    humanize,
+    object_label,
+    pk_criterion,
+    pk_keys,
+    pk_string,
+    pluralize,
+    split_camel,
+)
 from .log import AdminLog, SavedFilter, record
 from .options import InlineAdmin, ModelAdmin
 
 MAX_INLINE_ROWS = 1000
 AUTOCOMPLETE_RESULTS = 20
 MAX_RELATED_LISTED = 25
+MAX_DELETE_ROWS = 5000
+MAX_DELETE_DEPTH = 50
 ACTIVITY_ACTIONS = ("add", "change", "delete", "restore")
 ACTIVITY_PER_PAGE = 50
 MAX_ACTIVITY_USERS = 200
@@ -691,32 +703,212 @@ def _after_save(request: Any, admin: ModelAdmin, obj: Any, data: Any, created: b
     return redirect(_list_url(request, admin))
 
 
-def collect_related(session: Any, obj: Any, depth: int = 3) -> list[dict[str, Any]]:
-    """What would be deleted along with `obj`, following ORM delete cascades."""
-    summary: dict[str, dict[str, Any]] = {}
+def collect_deletion(session: Any, request: Any, admin: ModelAdmin, objects: list[Any]) -> dict[str, Any]:
+    """What deleting `objects` would remove, and which rows stop it from happening.
 
-    def walk(current: Any, level: int) -> None:
-        for rel in inspect(type(current)).relationships:
-            if not rel.cascade.delete:
+    Follows ORM cascades and every foreign key in the model's metadata, so database cascades,
+    many-to-many links and references with no relationship on this side are all covered.
+    """
+    trash = request.state.trash
+    root = _root(request)
+    plan: dict[str, Any] = {"roots": [], "summary": [], "blocked": [], "truncated": False}
+    can_open = not trash and admin.has_view_permission(request)
+    plan["roots"] = [
+        {
+            "label": object_label(obj),
+            "url": f"{root}/{admin.slug}/{_url_pk(obj)}/change" if can_open else None,
+            "groups": [],
+        }
+        for obj in objects[:MAX_RELATED_LISTED]
+    ]
+    if not objects or admin.soft_deletes(request):
+        return plan
+
+    registry = inspect(type(objects[0])).registry
+    mapped = {
+        m.local_table: m for m in registry.mappers if m.inherits is None or m.inherits.local_table is not m.local_table
+    }
+    seen = {inspect(obj).identity_key for obj in objects}
+    blockers: dict[Any, tuple[type, Any]] = {}
+    blocked_links: dict[str, int] = {}
+    totals: dict[str, int] = {}
+    link_names: set[str] = set()
+    budget = MAX_DELETE_ROWS
+
+    def spend(rows: list[Any]) -> list[Any]:
+        nonlocal budget
+        if len(rows) > budget:
+            plan["truncated"] = True
+            rows = rows[:budget]
+        budget -= len(rows)
+        return rows
+
+    def load(stmt: Any) -> list[Any]:
+        return spend(list(session.execute(stmt.limit(budget + 1)).all()))
+
+    def group_name(cls: type) -> str:
+        child = admin.site.admin_for_model(cls)
+        return child.name_plural if child else pluralize(split_camel(cls.__name__))
+
+    def describe(cls: type, rows: list[Any]) -> list[dict[str, Any]]:
+        """Labels and links, showing only what this user can reach through the child's own admin."""
+        child = admin.site.admin_for_model(cls)
+        if child is None:
+            return [{"label": object_label(obj), "url": None, "groups": []} for obj in rows]
+        visible: set[Any] = set()
+        if rows and child.has_view_permission(request):
+            stmt = child.get_queryset(request).where(or_(*[pk_criterion(cls, pk_string(obj)) for obj in rows]))
+            visible = {inspect(obj).identity_key for obj in session.scalars(stmt).unique()}
+        return [
+            {
+                "label": object_label(obj),
+                "url": f"{root}/{child.slug}/{_url_pk(obj)}/change",
+                "groups": [],
+            }
+            if inspect(obj).identity_key in visible
+            else {"label": f"Hidden {child.name.lower()}", "url": None, "groups": []}
+            for obj in rows
+        ]
+
+    def link_row(table_row: Any, table: Any, own: Any) -> dict[str, Any]:
+        for other in table.foreign_key_constraints:
+            target = mapped.get(other.referred_table)
+            if other is own or target is None:
+                continue
+            criteria = [el.column == table_row._mapping[el.parent] for el in other.elements]
+            found = session.scalars(select(target.class_).where(and_(*criteria))).first()
+            if found is not None:
+                return describe(target.class_, [found])[0]
+        return {"label": ", ".join(str(value) for value in table_row), "url": None, "groups": []}
+
+    def add_rows(groups: list[Any], cls: type, rows: list[Any], depth: int, show: bool) -> None:
+        fresh = []
+        for obj in rows:
+            key = inspect(obj).identity_key
+            if key not in seen:
+                seen.add(key)
+                fresh.append(obj)
+        fresh = spend(fresh)
+        if not fresh:
+            return
+        name = group_name(cls)
+        totals[name] = totals.get(name, 0) + len(fresh)
+        shown = fresh[:MAX_RELATED_LISTED]
+        described = describe(cls, shown) if show else []
+        for index, obj in enumerate(fresh):
+            below = walk(obj, depth - 1, show and index < MAX_RELATED_LISTED)
+            if show and index < MAX_RELATED_LISTED:
+                described[index]["groups"] = below
+        if show:
+            groups.append({"name": name, "count": len(fresh), "rows": described, "link": False})
+
+    def walk(current: Any, depth: int, show: bool) -> list[dict[str, Any]]:
+        groups: list[dict[str, Any]] = []
+        if depth <= 0:
+            plan["truncated"] = True
+            return groups
+        mapper = inspect(current).mapper
+        for rel in mapper.relationships:
+            if rel.viewonly or not rel.cascade.delete:
                 continue
             related = getattr(current, rel.key)
-            for child in related if rel.uselist else [related] if related else []:
-                entry = summary.setdefault(rel.mapper.class_.__name__, {"count": 0, "items": []})
-                entry["count"] += 1
-                if len(entry["items"]) < MAX_RELATED_LISTED:
-                    entry["items"].append(object_label(child))
-                if level > 1:
-                    walk(child, level - 1)
+            rows = list(related) if rel.uselist else [related] if related is not None else []
+            add_rows(groups, rel.mapper.class_, rows, depth, show)
+        for table in mapper.local_table.metadata.tables.values():
+            for fk in table.foreign_key_constraints:
+                if fk.referred_table not in mapper.tables:
+                    continue
+                owner = mapped.get(table)
+                # A joined-inheritance child's key points at its own parent row.
+                if owner is not None and owner.common_parent(mapper) and all(c.primary_key for c in fk.columns):
+                    continue
+                rel = next(
+                    (
+                        r
+                        for r in mapper.relationships
+                        if not r.viewonly
+                        and r.direction is not MANYTOONE
+                        and {child for _, child in r.synchronize_pairs} == set(fk.columns)
+                    ),
+                    None,
+                )
+                if rel is not None and rel.cascade.delete:
+                    continue  # Already walked above.
+                ondelete = (fk.ondelete or "").upper()
+                where = and_(
+                    *[el.parent == getattr(current, mapper.get_property_by_column(el.column).key) for el in fk.elements]
+                )
+                if owner is None:
+                    if ondelete in ("SET NULL", "SET DEFAULT"):
+                        continue
+                    rows = load(select(table).where(where))
+                    if not rows:
+                        continue
+                    name = humanize(table.name)
+                    if rel is None and ondelete != "CASCADE":
+                        blocked_links[name] = blocked_links.get(name, 0) + len(rows)
+                        continue
+                    totals[name] = totals.get(name, 0) + len(rows)
+                    link_names.add(name)
+                    if show:
+                        described = [link_row(row, table, fk) for row in rows[:MAX_RELATED_LISTED]]
+                        groups.append({"name": name, "count": len(rows), "rows": described, "link": True})
+                    continue
+                if rel is not None and not rel.passive_deletes:
+                    # The ORM clears the key itself, which only a nullable column allows.
+                    if all(c.nullable for c in fk.columns):
+                        continue
+                    removed = False
+                elif ondelete in ("SET NULL", "SET DEFAULT"):
+                    continue
+                else:
+                    removed = ondelete == "CASCADE"
+                found = [row[0] for row in session.execute(select(owner.class_).where(where).limit(budget + 1))]
+                if removed:
+                    add_rows(groups, owner.class_, found, depth, show)
+                else:
+                    for obj in spend(found):
+                        blockers[inspect(obj).identity_key] = (owner.class_, obj)
+        return groups
 
-    walk(obj, depth)
-    return [{"name": name, **entry} for name, entry in summary.items()]
+    # get_queryset answers for the deleted items page while on it, and children live on the normal lists.
+    request.state.trash = False
+    try:
+        for index, obj in enumerate(objects):
+            below = walk(obj, MAX_DELETE_DEPTH, index < MAX_RELATED_LISTED)
+            if index < MAX_RELATED_LISTED:
+                plan["roots"][index]["groups"] = below
+        plan["summary"] = [{"name": name, "count": count, "link": name in link_names} for name, count in totals.items()]
+        # A custom delete_model may deal with dependants or keep the row, so only the database can refuse it.
+        if type(admin).delete_model is ModelAdmin.delete_model:
+            by_class: dict[type, list[Any]] = {}
+            for key, (cls, obj) in blockers.items():
+                if key not in seen:  # Also being deleted, so it isn't in the way.
+                    by_class.setdefault(cls, []).append(obj)
+            plan["blocked"] = [
+                {
+                    "name": group_name(cls),
+                    "count": len(rows),
+                    "rows": describe(cls, rows[:MAX_RELATED_LISTED]),
+                    "link": False,
+                }
+                for cls, rows in by_class.items()
+            ] + [{"name": name, "count": count, "rows": [], "link": True} for name, count in blocked_links.items()]
+    finally:
+        request.state.trash = trash
+    return plan
 
 
 def delete_view(session: Any, request: Any, admin: ModelAdmin, pk: str) -> Response:
     obj = admin.get_object(session, request, pk)
     admin.require(admin.has_delete_permission(request, obj))
     label = object_label(obj)
+    plan = collect_deletion(session, request, admin, [obj])
+    delete_url = request.url.path + (f"?{request.url.query}" if request.url.query else "")
     if request.method == "POST":
+        if plan["blocked"]:
+            admin.message_user(request, f"“{label}” can't be deleted because other records depend on it.", "error")
+            return redirect(delete_url)
         try:
             record(session, request, admin, obj, "delete")
             admin.delete_model(session, request, obj)
@@ -739,11 +931,10 @@ def delete_view(session: Any, request: Any, admin: ModelAdmin, pk: str) -> Respo
             "crumbs": _crumbs(
                 request, admin, (label, f"{_root(request)}/{admin.slug}/{_url_pk(obj)}/change"), ("Delete", None)
             ),
-            "labels": [label],
-            "related": [] if admin.soft_deletes(request) else collect_related(session, obj),
+            "plan": plan,
             "soft": admin.soft_deletes(request),
             "cancel_url": f"{_root(request)}/{admin.slug}/{_url_pk(obj)}/change",
-            "post_url": request.url.path + (f"?{request.url.query}" if request.url.query else ""),
+            "post_url": delete_url,
             "hidden": [],
         },
     )
@@ -753,7 +944,12 @@ def delete_selected(session: Any, request: Any, admin: ModelAdmin, objects: list
     data = request.state.form
     allowed = [obj for obj in objects if admin.has_delete_permission(request, obj)]
     admin.require(len(allowed) == len(objects))
+    plan = collect_deletion(session, request, admin, objects)
+    back = request.url.path + (f"?{request.url.query}" if request.url.query else "")
     if data.get("_confirm") == "1":
+        if plan["blocked"]:
+            admin.message_user(request, "Nothing was deleted because other records depend on these.", "error")
+            return redirect(back)
         for obj in objects:
             record(session, request, admin, obj, "delete")
             admin.delete_model(session, request, obj)
@@ -766,13 +962,6 @@ def delete_selected(session: Any, request: Any, admin: ModelAdmin, objects: list
         hidden.append(("select_across", "1"))
     else:
         hidden += [("_selected", pk_string(obj)) for obj in objects]
-    related: dict[str, dict[str, Any]] = {}
-    for obj in [] if admin.soft_deletes(request) else objects[:MAX_RELATED_LISTED]:
-        for entry in collect_related(session, obj):
-            merged = related.setdefault(entry["name"], {"name": entry["name"], "count": 0, "items": []})
-            merged["count"] += entry["count"]
-            merged["items"] = (merged["items"] + entry["items"])[:MAX_RELATED_LISTED]
-    back = request.url.path + (f"?{request.url.query}" if request.url.query else "")
     word = admin.name if len(objects) == 1 else admin.name_plural
     return admin.site.render(
         request,
@@ -781,9 +970,8 @@ def delete_selected(session: Any, request: Any, admin: ModelAdmin, objects: list
             "admin": admin,
             "title": f"Delete {len(objects)} {word.lower()}?",
             "crumbs": _crumbs(request, admin, ("Delete selected", None)),
-            "labels": [object_label(o) for o in objects[:MAX_RELATED_LISTED]],
+            "plan": plan,
             "extra_count": max(0, len(objects) - MAX_RELATED_LISTED),
-            "related": list(related.values()),
             "soft": admin.soft_deletes(request),
             "cancel_url": back,
             "post_url": back,

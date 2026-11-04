@@ -4,15 +4,12 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- The delete page shows a collapsible tree of what will be removed, with counts per model and links to records. It now includes database cascades and many-to-many links
+- Records that stop a delete are shown up front in place of the delete button. This includes foreign keys with no relationship on the deleted side, so a delete that used to leave orphans on a database without foreign key checks, such as default SQLite, is now refused
+
 ## [0.2.0] - 2026-11-04
-
-### Added
-
-- Password reset: `mount(password_reset=..., public_url=...)`, and a `changepassword` command
-- `RichTextField` and `sanitize_html`
-- Saved filters on every list, kept per user
-- An Activity page with everyone's changes, behind the `activity.view` permission
-- `log_values`, to keep old and new values of chosen fields in the history
 
 ### Changed
 
