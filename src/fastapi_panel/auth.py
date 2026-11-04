@@ -126,6 +126,32 @@ class ModelAuth(AuthBackend):
     def set_password(self, session: Any, user: Any, password: str) -> None:
         setattr(user, self.password_field, self.hasher(password))
 
+    def create_user(self, session: Any, username: str, password: str, *, superuser: bool, **extra: Any) -> Any:
+        user = self.model(**extra)
+        setattr(user, self.username_field, username)
+        self.set_password(session, user, password)
+        for name in (self.active_field, self.staff_field):
+            if name:
+                setattr(user, name, True)
+        if self.superuser_field:
+            setattr(user, self.superuser_field, superuser)
+        session.add(user)
+        session.commit()
+        return user
+
+    def required_fields(self) -> list[Any]:
+        """Other columns a new user can't be saved without, like an email."""
+        known = {self.username_field, self.password_field, self.active_field, self.staff_field, self.superuser_field}
+        return [
+            prop
+            for prop in inspect(self.model).column_attrs
+            if prop.key not in known
+            and not prop.columns[0].nullable
+            and not prop.columns[0].primary_key
+            and prop.columns[0].default is None
+            and prop.columns[0].server_default is None
+        ]
+
 
 @dataclass(frozen=True)
 class StaticUser:
