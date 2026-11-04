@@ -13,6 +13,6 @@ body:
     id: solution
     attributes:
       label: What would you like to happen?
-      description: If Django admin has this, tell us the option name.
+      description: If another admin tool has this, tell us how it works there.
     validations:
       required: true

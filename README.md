@@ -1,7 +1,7 @@
 <h1 align="center">FastAPI Panel</h1>
 
 <p align="center">
-  <strong>The Django admin experience for FastAPI.</strong><br>
+  <strong>A modular admin panel for FastAPI.</strong><br>
   Register a SQLAlchemy model, get a secure back office.
 </p>
 
@@ -93,22 +93,6 @@ An admin panel can reach all your data, so these are on by default and have no o
 
 The panel refuses to start without authentication or with a short secret key. Read [the security guide](docs/security.md) for what's left to you.
 
-## Coming from Django
-
-```python
-# Django                                 # FastAPI Panel
-admin.site.register(Product)             site.register(Product)
-@admin.register(Product)                 @register(Product)
-class ProductAdmin(admin.ModelAdmin):    class ProductAdmin(ModelAdmin):
-    list_display = ("name", "price")         list_display = ("name", "price")
-
-@admin.display(description="Total")      @display("Total")
-@admin.action(description="Publish")     @action("Publish")
-def publish(self, request, queryset):    def publish(self, session, request, objects):
-```
-
-The [comparison page](docs/django-comparison.md) lists every option and what differs.
-
 ## Documentation
 
 - [Getting started](docs/getting-started.md)
@@ -116,11 +100,10 @@ The [comparison page](docs/django-comparison.md) lists every option and what dif
 - [Authentication and permissions](docs/auth-and-permissions.md)
 - [Modular projects and customizing](docs/customizing.md): autodiscovery, multiple sites, custom pages, templates, themes
 - [Security](docs/security.md)
-- [Coming from Django](docs/django-comparison.md)
 
 ## Roadmap
 
-File and image fields, per-site timezones, translations, a saved-filters UI, and a Redis option for login throttling across workers. Ideas and pull requests are welcome, see [CONTRIBUTING](CONTRIBUTING.md).
+File and image fields, per-site timezones, translations, a saved-filters UI, password reset by email, and a Redis option for login throttling across workers. Ideas and pull requests are welcome, see [CONTRIBUTING](CONTRIBUTING.md).
 
 ## License
 

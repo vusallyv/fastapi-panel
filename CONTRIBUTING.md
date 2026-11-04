@@ -42,7 +42,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/): `feat: add rad
 ## What we look for
 
 - **Small and readable.** This library should stay easy to read in an afternoon. Prefer fewer options and plain code over flexibility nobody needs yet.
-- **Familiar.** If Django has the option, use the same name and meaning unless there's a good reason not to.
+- **Consistent.** New options follow the naming of the existing ones.
 - **Tested.** New behavior and bug fixes come with a test. Security behavior always does.
 - **Secure by default.** No inline scripts or styles, and no new way to write a field that isn't on the form. Anything that touches login, sessions or permissions gets extra attention.
 - **No new dependencies** unless there's really no other way.

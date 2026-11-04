@@ -17,7 +17,7 @@ Subclass `ModelAdmin` and set what you need. Everything has a default.
 | `date_hierarchy` | `None` | A date column for year, month and day drill-down |
 | `show_full_result_count` | `True` | Run a second count for "3 of 1,000". Turn off on huge tables |
 
-Search prefixes follow Django: `"^name"` starts with, `"=email"` exact, no prefix means contains. Each word has to match at least one field.
+Search prefixes: `"^name"` starts with, `"=email"` exact, no prefix means contains. Each word has to match at least one field.
 
 Relationships in `list_display` are loaded up front, so a list of 50 rows doesn't run 50 extra queries. If a computed column reaches further, add the loading yourself in `get_queryset`.
 
@@ -72,7 +72,7 @@ fieldsets = (
 )
 ```
 
-Fields are generated from column types: text, numbers, decimals, booleans, dates, times, enums, UUIDs and JSON. Foreign keys become a dropdown, and above 200 options they switch to autocomplete or an ID input so large tables stay fast.
+Fields are generated from column types: text, numbers, decimals, booleans, dates, times, enums, UUIDs and JSON. Foreign keys become a dropdown, and above 200 options they switch to autocomplete or an ID input so large tables stay fast. Times are shown in UTC.
 
 These columns are left out of the default form. List one in `fields` to bring it back:
 
@@ -134,6 +134,8 @@ class ProductAdmin(ModelAdmin):
 ```
 
 The panel commits for you. Return a `Response` to send something else back, such as a file. `delete_selected` and `export_csv` are included. Change that with `builtin_actions = ()`, choose the exported columns with `export_fields`, and adjust the limit with `action_max_rows` (10,000 by default).
+
+Deletes follow your SQLAlchemy cascades. The confirmation page lists what `cascade="..."` on your relationships will remove. A database-level `ON DELETE CASCADE` works but isn't listed, and a foreign key that blocks a delete shows an error message. `delete_selected` loads the rows and calls `delete_model` on each, so your hooks and cascades run.
 
 ## Filters
 

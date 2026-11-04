@@ -483,7 +483,7 @@ site = AdminSite()
 
 
 def register(*models: type, site: AdminSite = site) -> Callable[[type[ModelAdmin]], type[ModelAdmin]]:
-    """`@register(Product)` above a ModelAdmin, like in Django."""
+    """`@register(Product)` above a ModelAdmin."""
 
     def decorate(admin_class: type[ModelAdmin]) -> type[ModelAdmin]:
         for model in models:

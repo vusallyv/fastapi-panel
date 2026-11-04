@@ -8,7 +8,7 @@ pip install fastapi-panel
 
 ## 1. Register your models
 
-Put registrations in an `admin.py` next to your models, as you would in Django.
+Put registrations in an `admin.py` next to your models.
 
 ```python
 # shop/admin.py

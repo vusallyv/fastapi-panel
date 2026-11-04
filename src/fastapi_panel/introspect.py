@@ -81,7 +81,7 @@ def related_criterion(model: type, path: str, build: Callable[[Any], Any]) -> An
 
 
 def search_criterion(model: type, spec: str, term: str) -> Any:
-    """`spec` follows Django's search_fields: `^` starts with, `=` exact, otherwise contains."""
+    """`spec` prefixes: `^` starts with, `=` exact, otherwise contains."""
     mode, path = (spec[0], spec[1:]) if spec[0] in "^=" else ("", spec)
 
     def build(column: Any) -> Any:
