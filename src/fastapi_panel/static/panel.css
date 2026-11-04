@@ -449,6 +449,14 @@ details.fieldset:not([open]) > summary { border-bottom: 0; border-radius: var(--
   .sidebar { transition: none; }
 }
 
+/* Group permissions */
+.permissions { max-width: 720px; }
+.permissions .table-wrap { border: 1px solid var(--border); border-radius: 6px; }
+.permissions-grid { font-size: 13px; }
+.permissions-grid th:not(:first-child), .permissions-grid td { width: 72px; text-align: center; }
+.permissions-grid td input { display: block; margin: 0 auto; }
+.permissions-other { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; font-weight: 400; }
+
 /* Delete confirmation */
 .delete-page > p { margin-top: 0; }
 .delete-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; padding: 0; list-style: none; }

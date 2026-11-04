@@ -30,6 +30,31 @@
     <option value="{{ value }}"{% if value in field.value %} selected{% endif %}>{{ label }}</option>
     {% endfor %}
   </select>
+{% elif field.widget == "permissions" %}
+  <div class="permissions" id="id_{{ field.html_name }}" role="group" aria-label="{{ field.label }}">
+    <div class="table-wrap">
+      <table class="table permissions-grid">
+        <thead><tr><th scope="col">Model</th>{% for action in field.actions %}<th scope="col">{{ action|capitalize }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for row in field.rows %}
+          <tr>
+            <th scope="row">{{ row.label }}</th>
+            {% for action in field.actions %}
+            {% set value = row.slug ~ "." ~ action %}
+            <td><input type="checkbox" name="{{ field.html_name }}" value="{{ value }}" aria-label="{{ action|capitalize }} {{ row.label }}"{% if value in field.value %} checked{% endif %}></td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% for value, label in field.others %}
+    <label class="permissions-other"><input type="checkbox" name="{{ field.html_name }}" value="{{ value }}"{% if value in field.value %} checked{% endif %}> {{ label }}</label>
+    {% endfor %}
+    {% for value in field.value if value not in field.known %}
+    <label class="permissions-other"><input type="checkbox" name="{{ field.html_name }}" value="{{ value }}" checked> <code>{{ value }}</code></label>
+    {% endfor %}
+  </div>
 {% elif field.widget == "file" %}
   <div class="file-field" data-file-field>
     {% if field.current %}

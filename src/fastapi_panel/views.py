@@ -912,6 +912,8 @@ def delete_view(session: Any, request: Any, admin: ModelAdmin, pk: str) -> Respo
         try:
             record(session, request, admin, obj, "delete")
             admin.delete_model(session, request, obj)
+            if obj in session.deleted:
+                admin.site.auth.forget_user(session, obj)
             session.commit()
         except DBAPIError:
             session.rollback()
@@ -953,6 +955,8 @@ def delete_selected(session: Any, request: Any, admin: ModelAdmin, objects: list
         for obj in objects:
             record(session, request, admin, obj, "delete")
             admin.delete_model(session, request, obj)
+            if obj in session.deleted:
+                admin.site.auth.forget_user(session, obj)
         session.flush()
         word = admin.name if len(objects) == 1 else admin.name_plural
         admin.message_user(request, f"Deleted {len(objects)} {word.lower()}.")

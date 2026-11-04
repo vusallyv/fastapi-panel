@@ -36,7 +36,23 @@ Permissions are strings in the form `<slug>.<action>`, where the action is `view
 
 `order.*` covers all actions on orders and `*` covers everything. Having `change` implies `view`.
 
-For roles or groups, subclass the backend. Load what you need in `get_user`, because the database session is closed by the time `has_perm` runs:
+## Staff groups
+
+Turn on groups to manage permissions from the panel, with no column on your user model:
+
+```python
+ModelAuth(User, superuser_field="is_superuser", groups=True)
+```
+
+A **Staff groups** page appears under System. Each group has a name, a grid of models and actions to tick, and its members. Someone in several groups gets all of their permissions, on top of any `permissions_field`. Changes apply on the member's next request.
+
+Only superusers can see or change groups, even if a user holds the `*` permission, because anyone who could edit a group could give themselves everything. The same goes for your own user admin: don't let non-superusers edit `is_superuser` or `permissions`.
+
+The grid sets the same permission strings as above, so it has no effect on a `ModelAdmin` whose `has_*_permission` methods ignore them. Groups need `ModelAuth`, and the two tables described in [Migrations](getting-started.md#4-migrations). Without those tables, non-superusers get an error page rather than extra access. Deleting a user through the panel removes their memberships, but deleting one elsewhere doesn't. If your database can reuse user ids, delete the rows in `fastapi_panel_group_member` too.
+
+## Your own roles
+
+For anything else, subclass the backend. Load what you need in `get_user`, because the database session is closed by the time `has_perm` runs:
 
 ```python
 class RoleAuth(ModelAuth):

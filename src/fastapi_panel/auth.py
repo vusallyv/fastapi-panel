@@ -5,10 +5,14 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import inspect, select
+from sqlalchemy import delete, inspect, select
 
 from .introspect import object_label, pk_criterion, pk_string
+from .log import StaffGroup, StaffGroupMember
 from .security import DUMMY_HASH, hash_password, verify_password
+
+GROUP_PERMISSIONS = "_fastapi_panel_group_permissions"
+MAX_STAFF_CHOICES = 1000
 
 
 class AuthBackend:
@@ -19,6 +23,7 @@ class AuthBackend:
     """
 
     can_change_password = False
+    groups = False
 
     def find_user(self, session: Any, username: str) -> Any | None:
         raise NotImplementedError
@@ -40,6 +45,12 @@ class AuthBackend:
 
     def has_perm(self, user: Any, perm: str) -> bool:
         return True
+
+    def is_superuser(self, user: Any) -> bool:
+        return False
+
+    def forget_user(self, session: Any, user: Any) -> None:
+        """Called when the panel really deletes a row, in case it's a user."""
 
     def session_hash(self, user: Any) -> str:
         """Sessions die when this value changes. Derive it from the password hash."""
@@ -69,6 +80,7 @@ class ModelAuth(AuthBackend):
         staff_field: str | None = "is_staff",
         superuser_field: str | None = None,
         permissions_field: str | None = None,
+        groups: bool = False,
         verify: Callable[[str, str], bool] = verify_password,
         hasher: Callable[[str], str] = hash_password,
     ) -> None:
@@ -76,7 +88,10 @@ class ModelAuth(AuthBackend):
         for name in (username_field, password_field, active_field, staff_field, superuser_field, permissions_field):
             if name is not None and name not in columns:
                 raise ValueError(f"{model.__name__} has no field {name!r}. Pass the right name, or None to skip it.")
+        if groups and superuser_field is None:
+            raise ValueError("groups=True needs superuser_field, since only superusers can manage groups.")
         self.model = model
+        self.groups = groups
         self.username_field = username_field
         self.password_field = password_field
         self.active_field = active_field
@@ -92,9 +107,18 @@ class ModelAuth(AuthBackend):
 
     def get_user(self, session: Any, user_id: str) -> Any | None:
         try:
-            return session.scalars(select(self.model).where(pk_criterion(self.model, user_id))).first()
+            user = session.scalars(select(self.model).where(pk_criterion(self.model, user_id))).first()
         except ValueError:
             return None
+        if user is not None and self.groups and not self.is_superuser(user):
+            stmt = (
+                select(StaffGroup.permissions)
+                .join(StaffGroupMember, StaffGroupMember.group_id == StaffGroup.id)
+                .where(StaffGroupMember.user_id == pk_string(user))
+            )
+            # object.__setattr__ because SQLModel refuses attributes that aren't fields.
+            object.__setattr__(user, GROUP_PERMISSIONS, {p for found in session.scalars(stmt) for p in found})
+        return user
 
     def check_password(self, user: Any | None, password: str) -> bool:
         if user is None:
@@ -113,12 +137,29 @@ class ModelAuth(AuthBackend):
         return all(getattr(user, name) for name in (self.active_field, self.staff_field) if name)
 
     def has_perm(self, user: Any, perm: str) -> bool:
-        if self.superuser_field and getattr(user, self.superuser_field):
+        if self.is_superuser(user):
             return True
-        if not self.permissions_field:
+        if not self.permissions_field and not self.groups:
             return self.superuser_field is None
-        granted = getattr(user, self.permissions_field) or []
+        granted = set(getattr(user, self.permissions_field) or []) if self.permissions_field else set()
+        granted |= getattr(user, GROUP_PERMISSIONS, set())
         return perm in granted or "*" in granted or f"{perm.split('.')[0]}.*" in granted
+
+    def is_superuser(self, user: Any) -> bool:
+        return bool(self.superuser_field and getattr(user, self.superuser_field))
+
+    def forget_user(self, session: Any, user: Any) -> None:
+        # shortcut: deletes outside the panel leave the rows behind, add a job if your database reuses user ids.
+        if self.groups and isinstance(user, self.model):
+            session.execute(delete(StaffGroupMember).where(StaffGroupMember.user_id == pk_string(user)))
+
+    def staff_choices(self, session: Any) -> list[tuple[str, str]]:
+        """Who can be added to a group."""
+        stmt = select(self.model).order_by(getattr(self.model, self.username_field)).limit(MAX_STAFF_CHOICES)
+        for name in (self.active_field, self.staff_field):
+            if name:
+                stmt = stmt.where(getattr(self.model, name).is_(True))
+        return [(pk_string(user), self.user_label(user)) for user in session.scalars(stmt)]
 
     def session_hash(self, user: Any) -> str:
         return hashlib.sha256(str(getattr(user, self.password_field)).encode()).hexdigest()

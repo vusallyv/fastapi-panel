@@ -3,8 +3,8 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
-from sqlalchemy import DateTime, Index, String, Text, UniqueConstraint
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from .introspect import object_label, pk_string
 
@@ -43,6 +43,30 @@ class SavedFilter(Base):
     model: Mapped[str] = mapped_column(String(100))
     name: Mapped[str] = mapped_column(String(100))
     query: Mapped[str] = mapped_column(Text)
+
+
+class StaffGroup(Base):
+    __tablename__ = "fastapi_panel_group"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    permissions: Mapped[list[str]] = mapped_column(JSON, default=list)
+
+    members: Mapped[list[StaffGroupMember]] = relationship(cascade="all, delete-orphan")
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class StaffGroupMember(Base):
+    __tablename__ = "fastapi_panel_group_member"
+
+    group_id: Mapped[int] = mapped_column(ForeignKey("fastapi_panel_group.id", ondelete="CASCADE"), primary_key=True)
+    # The user's primary key as text, because the user table is yours and can have any key type.
+    user_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+
+    def __str__(self) -> str:
+        return f"User {self.user_id}"
 
 
 def record(session: Any, request: Any, admin: Any, obj: Any, action: str, message: str = "") -> None:

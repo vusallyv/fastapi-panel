@@ -32,7 +32,8 @@ from starlette.staticfiles import StaticFiles
 
 from . import __version__, imports, views
 from .db import Database
-from .log import AdminLog, SavedFilter
+from .groups import StaffGroupAdmin
+from .log import AdminLog, SavedFilter, StaffGroup, StaffGroupMember
 from .log import Base as PanelBase
 from .options import ImproperlyConfigured, ModelAdmin
 from .security import SECURITY_HEADERS, BodyTooLarge, LimitBody, LoginThrottle, Signer
@@ -209,6 +210,8 @@ class AdminSite:
         self.max_body_size = max_body_size
         self.throttle = LoginThrottle()
         self.reset_throttle = LoginThrottle(max_attempts=3, window=RESET_LINK_AGE)
+        if self.auth.groups and self.admin_for_model(StaffGroup) is None:
+            self.register(StaffGroup, StaffGroupAdmin)
         for admin in self._registry.values():
             admin.check()
         if self.audit_log and not any(page["path"] == "/activity" for page in self._pages):
@@ -373,16 +376,18 @@ class AdminSite:
         if self._tables_ready:
             return
 
-        def create(session: Any) -> None:
-            tables = [SavedFilter.__table__, *([AdminLog.__table__] if self.audit_log else [])]
-            PanelBase.metadata.create_all(session.connection(), tables=tables)
-            session.commit()
-
         try:
-            await self.db.run(create)
+            await self.db.run(self._create_tables)
         except DBAPIError:
             pass  # Another worker won the race, or the table is managed by migrations.
         self._tables_ready = True
+
+    def _create_tables(self, session: Any) -> None:
+        tables = [SavedFilter.__table__, *([AdminLog.__table__] if self.audit_log else [])]
+        if self.auth.groups:
+            tables += [StaffGroup.__table__, StaffGroupMember.__table__]
+        PanelBase.metadata.create_all(session.connection(), tables=tables)
+        session.commit()
 
     def _redirect_to_login(self, request: Request) -> Response:
         root = request.scope["root_path"]

@@ -126,7 +126,7 @@ def print_reset_link(user: Staff, url: str) -> None:
 site.mount(
     app,
     engine=engine,
-    auth=ModelAuth(Staff, superuser_field="is_superuser"),
+    auth=ModelAuth(Staff, superuser_field="is_superuser", groups=True),
     secret_key=SECRET_KEY,
     password_reset=print_reset_link,
     public_url="http://127.0.0.1:8000/admin",

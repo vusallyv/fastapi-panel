@@ -22,7 +22,7 @@ from .forms import (
     UUIDField,
     ValidationError,
 )
-from .log import AdminLog
+from .log import AdminLog, StaffGroup
 from .options import (
     ImproperlyConfigured,
     InlineAdmin,
@@ -62,6 +62,7 @@ __all__ = [
     "ModelAuth",
     "RichTextField",
     "SimpleFilter",
+    "StaffGroup",
     "StackedInline",
     "StaticAuth",
     "Storage",
