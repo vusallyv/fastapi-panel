@@ -3,7 +3,7 @@
 {% macro upload_form(first) %}
 <form method="post" action="{{ post_url }}" enctype="multipart/form-data">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <label for="id_file">{{ "CSV file" if first else "Choose another file" }}</label>
+  <label class="import-file" for="id_file">{{ "CSV file" if first else "Choose another file" }}</label>
   <input id="id_file" name="file" type="file" accept=".csv,text/csv" required>
   <div class="submit-row">
     <button class="button{% if first %} button-primary{% endif %}" type="submit">Check file</button>

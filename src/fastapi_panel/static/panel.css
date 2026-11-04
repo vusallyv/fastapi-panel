@@ -103,6 +103,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 }
 .modal::backdrop { background: #0007; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.modal-head .link-button { font-size: 20px; line-height: 1; }
 .modal iframe { flex: 1; width: 100%; border: 0; background: var(--bg); }
 
 /* Files */
@@ -119,6 +120,8 @@ input[type="file"]::file-selector-button {
 .import-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .import-errors { color: var(--danger); }
 .import-note { margin-bottom: 12px; }
+.import-preview { margin-block: 12px; }
+.import-file { display: block; margin-bottom: 4px; font-weight: 600; }
 
 /* Layout */
 .layout { display: flex; min-height: 100vh; }
