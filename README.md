@@ -9,10 +9,10 @@
   <a href="https://github.com/zaman-labs/fastapi-panel/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/zaman-labs/fastapi-panel/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://pypi.org/project/fastapi-panel/"><img alt="PyPI" src="https://img.shields.io/pypi/v/fastapi-panel"></a>
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-blue">
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-green"></a>
+  <a href="https://github.com/zaman-labs/fastapi-panel/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-green"></a>
 </p>
 
-![The product list, with search, filters, bulk actions and inline editing](docs/screenshots/changelist.png)
+![The product list, with search, filters, bulk actions and inline editing](https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/changelist.png)
 
 If you know `ModelAdmin`, you already know this library: `list_display`, `search_fields`, `list_filter`, `fieldsets`, `inlines`, actions and the rest work the way you expect. There is no frontend build, no Node and no extra service. It's server-rendered pages inside your FastAPI app.
 
@@ -51,9 +51,9 @@ site.mount(
 )
 ```
 
-Open `/admin`, log in, and you have a list page, add and edit forms, delete confirmation, bulk actions, CSV export and a change history. See the [getting started guide](docs/getting-started.md) for creating your first user with `python -m fastapi_panel createuser` and setting up migrations.
+Open `/admin`, log in, and you have a list page, add and edit forms, delete confirmation, bulk actions, CSV export and a change history. See the [getting started guide](https://github.com/zaman-labs/fastapi-panel/blob/main/docs/getting-started.md) for creating your first user with `python -m fastapi_panel createuser` and setting up migrations.
 
-Want to try it first? The [example shop](examples/shop) runs in one command.
+Want to try it first? The [example shop](https://github.com/zaman-labs/fastapi-panel/tree/main/examples/shop) runs in one command.
 
 ## What you get
 
@@ -73,16 +73,16 @@ Want to try it first? The [example shop](examples/shop) runs in one command.
 
 <table>
   <tr>
-    <td><img alt="An order with its items edited inline" src="docs/screenshots/order-inline.png"></td>
-    <td><img alt="A product form with fieldsets and a many-to-many picker" src="docs/screenshots/product-form.png"></td>
+    <td><img alt="An order with its items edited inline" src="https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/order-inline.png"></td>
+    <td><img alt="A product form with fieldsets and a many-to-many picker" src="https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/product-form.png"></td>
   </tr>
   <tr>
-    <td><img alt="The dashboard with recent actions" src="docs/screenshots/dashboard.png"></td>
-    <td><img alt="The product list in dark mode" src="docs/screenshots/changelist-dark.png"></td>
+    <td><img alt="The dashboard with recent actions" src="https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/dashboard.png"></td>
+    <td><img alt="The product list in dark mode" src="https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/changelist-dark.png"></td>
   </tr>
   <tr>
-    <td><img alt="Adding a category in a dialog from the product form" src="docs/screenshots/related-popup.png"></td>
-    <td><img alt="A CSV import preview before anything is saved" src="docs/screenshots/import-preview.png"></td>
+    <td><img alt="Adding a category in a dialog from the product form" src="https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/related-popup.png"></td>
+    <td><img alt="A CSV import preview before anything is saved" src="https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/import-preview.png"></td>
   </tr>
 </table>
 
@@ -99,20 +99,20 @@ An admin panel can reach all your data, so these are on by default and have no o
 - Spreadsheet formulas are neutralised in CSV exports
 - Uploads get random names, images are checked against their contents, and files are only served behind login
 
-The panel refuses to start without authentication or with a short secret key. Read [the security guide](docs/security.md) for what's left to you.
+The panel refuses to start without authentication or with a short secret key. Read [the security guide](https://github.com/zaman-labs/fastapi-panel/blob/main/docs/security.md) for what's left to you.
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md)
-- [ModelAdmin reference](docs/model-admin.md): lists, forms, inlines, actions, filters
-- [Authentication and permissions](docs/auth-and-permissions.md)
-- [Modular projects and customizing](docs/customizing.md): autodiscovery, multiple sites, custom pages, templates, themes
-- [Security](docs/security.md)
+- [Getting started](https://github.com/zaman-labs/fastapi-panel/blob/main/docs/getting-started.md)
+- [ModelAdmin reference](https://github.com/zaman-labs/fastapi-panel/blob/main/docs/model-admin.md): lists, forms, inlines, actions, filters
+- [Authentication and permissions](https://github.com/zaman-labs/fastapi-panel/blob/main/docs/auth-and-permissions.md)
+- [Modular projects and customizing](https://github.com/zaman-labs/fastapi-panel/blob/main/docs/customizing.md): autodiscovery, multiple sites, custom pages, templates, themes
+- [Security](https://github.com/zaman-labs/fastapi-panel/blob/main/docs/security.md)
 
 ## Roadmap
 
-Translations, a saved-filters UI, password reset by email, two-factor login, and a Redis option for login throttling across workers. Ideas and pull requests are welcome, see [CONTRIBUTING](CONTRIBUTING.md).
+Translations, a saved-filters UI, password reset by email, two-factor login, and a Redis option for login throttling across workers. Ideas and pull requests are welcome, see [CONTRIBUTING](https://github.com/zaman-labs/fastapi-panel/blob/main/CONTRIBUTING.md).
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/zaman-labs/fastapi-panel/blob/main/LICENSE)
