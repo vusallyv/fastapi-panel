@@ -25,7 +25,9 @@ An admin panel can reach all your data, so its defaults are strict and don't dep
 | Rows from another parent or tenant | Inline rows must belong to the parent, and all access goes through `get_queryset` |
 | Open redirects | `next` must stay inside the panel |
 | Secrets on screen | Columns named like credentials are hidden unless listed explicitly |
-| Secrets in logs | The audit log records field names, not values |
+| Secrets in logs | The audit log records field names, not values, unless you list a field in `log_values`. Fields named like credentials are refused |
+| Scripts in rich text | `RichTextField` rebuilds submitted HTML from an allowlist, and only `http`, `https` and `mailto` links survive |
+| Password reset abuse | Links use your configured `public_url`, never the `Host` header. They're signed, expire in an hour and stop working after use. Responses don't reveal which accounts exist, and requests are limited per username and IP |
 | Spreadsheet formula injection | CSV cells starting with `=`, `+`, `-` or `@` are prefixed with `'` |
 | Oversized requests | POST bodies have a size limit, counted as they arrive so chunked requests can't avoid it. Inline forms, bulk actions and CSV imports have row limits |
 | Misconfiguration | It won't start without an auth backend, or with a secret under 32 characters. Plain text passwords are refused in `StaticAuth`, and `ModelAuth` won't guess whether someone is staff |
@@ -41,6 +43,10 @@ An admin panel can reach all your data, so its defaults are strict and don't dep
 **Keep `secret_key` secret.** With it, anyone can forge a session. Load it from the environment, use a different one per environment, and rotate it if it might have leaked. Rotating logs everybody out.
 
 **Consider limiting who can reach it.** Serve the panel on a VPN or restrict it by IP if you can. There's no built-in two-factor login yet, so a reverse proxy with SSO in front is the best way to add one today.
+
+**Sanitize rich text on your own pages.** The panel sanitizes `RichTextField` when it saves and displays it, but your site prints the column itself. Use `sanitize_html`, because rows can be written without going through the panel.
+
+**Protect reset emails.** A reset link gives access to the account for an hour, so keep it out of your logs and error reports, and use a mail provider you trust.
 
 **Mind the database user.** Actions run with your app's database credentials. Foreign key and unique rules still apply, and the panel shows a generic message if they fail.
 

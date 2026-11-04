@@ -4,6 +4,19 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- Password reset: `mount(password_reset=..., public_url=...)`, and a `changepassword` command
+- `RichTextField` and `sanitize_html`
+- Saved filters on every list, kept per user
+- An Activity page with everyone's changes, behind the `activity.view` permission
+- `log_values`, to keep old and new values of chosen fields in the history
+
+### Changed
+
+- Fixed: the many-to-many picker wrapped onto two rows when it had a **+** button
+- The panel now creates a second table, `fastapi_panel_saved_filter`. If your database user can't create tables, add it through your migrations. Lists keep working without it
+
 ## [0.1.0] - 2026-11-04
 
 First release.

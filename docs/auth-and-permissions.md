@@ -87,6 +87,41 @@ class LdapAuth(AuthBackend):
     def session_hash(self, user): ...  # sessions end when this value changes
 ```
 
+## Activity
+
+The Activity page needs the `activity.view` permission, so with `ModelAuth` that means superusers or a `permissions_field` that lists it. It only shows entries for models the person may view. Row-level rules from `get_queryset` don't apply to the log, so don't give this permission to someone who should only see some rows of a model.
+
+## Password reset
+
+Pass a function that delivers the link, and the panel's public address:
+
+```python
+def send_reset(user, url):
+    send_email(user.email, "Reset your password", f"Open this link to choose a new password: {url}")
+
+
+site.mount(
+    app,
+    engine=engine,
+    auth=ModelAuth(User),
+    secret_key=key,
+    password_reset=send_reset,
+    public_url="https://example.com/admin",
+)
+```
+
+A **Forgot your password?** link appears on the login page. `send_reset` can be sync or async, and runs after the response, so a slow mail server can't reveal which accounts exist. If it raises, the error goes to the `fastapi_panel` logger. People type their username, which is their email if that's your `username_field`.
+
+Links work for one hour and stop working once the password changes. Changing it also ends that user's open sessions. Each username and IP can request 3 links an hour.
+
+`public_url` is required because a link built from the request would use its `Host` header, which an attacker can set to their own site. `StaticAuth` has no reset, since its passwords live in your configuration.
+
+Without email, or if you've lost access, use the command line:
+
+```bash
+python -m fastapi_panel changepassword main --username ana
+```
+
 ## Sessions
 
 Sessions live in a signed cookie, so there's no session table. A session ends when it expires (`session_age`, 12 hours by default), on logout, when the password changes, or when the user is deactivated. The last two apply on the very next request.

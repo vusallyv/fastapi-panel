@@ -94,7 +94,7 @@ auth = StaticAuth({"admin": settings.PANEL_PASSWORD_HASH})
 
 ## 4. Migrations
 
-The audit log uses one table, `fastapi_panel_log`. It's created on the first request if it doesn't exist. If your database user can't create tables, or you want Alembic to own it, add its metadata to `env.py` and generate a migration as usual:
+The panel uses two tables, `fastapi_panel_log` for the audit log and `fastapi_panel_saved_filter` for saved filters. They're created on the first request if they don't exist. If your database user can't create tables, or you want Alembic to own it, add its metadata to `env.py` and generate a migration as usual:
 
 ```python
 from fastapi_panel.log import Base as PanelBase
@@ -102,7 +102,7 @@ from fastapi_panel.log import Base as PanelBase
 target_metadata = [Base.metadata, PanelBase.metadata]
 ```
 
-If you create the table by hand and don't include that metadata, tell Alembic to leave it alone with `include_name`, or autogenerate will want to drop it. To turn the log off, use `AdminSite(audit_log=False)`.
+If you create them by hand and don't include that metadata, tell Alembic to leave it alone with `include_name`, or autogenerate will want to drop them. To turn the log off, use `AdminSite(audit_log=False)`.
 
 ## 5. Try the example
 

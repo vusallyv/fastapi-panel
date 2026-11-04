@@ -59,14 +59,14 @@ Want to try it first? The [example shop](https://github.com/zaman-labs/fastapi-p
 
 | | |
 |---|---|
-| **Change lists** | Columns, computed columns, sorting, search across relations, sidebar filters, date drill-down, pagination, editing in the list |
-| **Forms** | Built from your models, with fieldsets, read-only fields, prefilled slugs, validation hooks, Pydantic schemas, foreign key autocomplete, many-to-many pickers, and a **+** button to create a related record on the spot |
+| **Change lists** | Columns, computed columns, sorting, search across relations, sidebar filters, saved filters, date drill-down, pagination, editing in the list |
+| **Forms** | Built from your models, with fieldsets, read-only fields, prefilled slugs, validation hooks, Pydantic schemas, a rich text editor, foreign key autocomplete, many-to-many pickers, and a **+** button to create a related record on the spot |
 | **Files and images** | Uploads with previews and thumbnails, stored on disk or anywhere else through a small storage class |
 | **Import and restore** | CSV import with a preview before anything is saved, and a Deleted page to restore soft-deleted records |
 | **Inlines** | Tabular and stacked, with add, edit and delete on the parent's page |
 | **Actions** | Your own bulk actions, plus delete with a summary of what cascades, CSV export and "select all across pages" |
-| **Permissions** | Per model and per action, row-level through `get_queryset` and `has_*_permission` |
-| **Audit log** | Who changed which fields and when, shown on each record's history page |
+| **Accounts and permissions** | Per model and per action, row-level through `get_queryset` and `has_*_permission`, with password reset by email |
+| **Audit log** | Who changed which fields and when, on each record's history and a site-wide Activity page, with old and new values for the fields you choose |
 | **Any SQLAlchemy setup** | Sync and async engines, SQLModel, composite primary keys |
 | **Timezones** | Show and enter times in your site's timezone, while the database stays in UTC |
 | **Interface** | Dark mode, works on a phone, keyboard friendly, no external assets |
@@ -111,7 +111,7 @@ The panel refuses to start without authentication or with a short secret key. Re
 
 ## Roadmap
 
-Translations, a saved-filters UI, password reset by email, two-factor login, and a Redis option for login throttling across workers. Ideas and pull requests are welcome, see [CONTRIBUTING](https://github.com/zaman-labs/fastapi-panel/blob/main/CONTRIBUTING.md).
+Translations, two-factor login, and a Redis option for login throttling across workers. Ideas and pull requests are welcome, see [CONTRIBUTING](https://github.com/zaman-labs/fastapi-panel/blob/main/CONTRIBUTING.md).
 
 ## License
 

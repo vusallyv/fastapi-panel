@@ -77,6 +77,8 @@ Settings for `mount`:
 | `secure_cookies` | automatic | Force the `Secure` flag on or off. Automatic follows the request scheme |
 | `trusted_origins` | `()` | Extra origins allowed to POST, see [Security](security.md) |
 | `max_body_size` | 10 MB | Largest POST body accepted |
+| `password_reset` | `None` | A function that delivers reset links, see [Password reset](auth-and-permissions.md#password-reset) |
+| `public_url` | `None` | The panel's public address, required with `password_reset` |
 
 ## Custom pages
 

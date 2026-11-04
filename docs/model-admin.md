@@ -100,6 +100,43 @@ Without `field` the error shows at the top of the form. `data` holds clean value
 
 Field validators work too: `CharField(validators=[check_sku])`. To validate with an existing schema, set `form_schema = ProductCreate`, and its errors appear next to the matching fields.
 
+## Rich text
+
+```python
+from fastapi_panel import ModelAdmin, RichTextField
+
+
+class ArticleAdmin(ModelAdmin):
+    field_overrides = {"body": RichTextField()}
+```
+
+The column holds HTML, edited with a small toolbar: bold, italic, underline, headings, lists, quotes and links. There's nothing to install and no external script. Without JavaScript it falls back to a plain text box.
+
+Whatever is submitted gets rebuilt from a short allowlist of tags, and only `http`, `https` and `mailto` links survive, so a script can't get in through this field. **Sanitize when you print it on your own site too**, in case a row was written some other way: `sanitize_html(article.body)`.
+
+Lists show the text without tags. CSV import goes through the same sanitizing. Images and tables aren't supported.
+
+## Saved filters
+
+Once someone has searched or filtered a list, **Save this view** keeps the search, filters and sorting under a name. Saved views appear above the list as links, and belong to that user and that model. There's nothing to configure.
+
+## History
+
+Each record's history lists who changed which fields. To also keep old and new values, name the fields:
+
+```python
+class OrderAdmin(ModelAdmin):
+    log_values = ("status", "total")
+```
+
+```
+Changed status. Status: Paid → Shipped
+```
+
+This is opt-in because those values stay in the log for good, so think before listing personal data. Fields named like credentials are refused at startup. Long values are cut at 200 characters. Inlines take `log_values` too.
+
+Everyone's changes are on the **Activity** page, filterable by user, model and action. See [who can open it](auth-and-permissions.md#activity).
+
 ## Files and images
 
 A file lives in a string column that holds its stored name. Set a storage on the site, then use `FileField` or `ImageField` for the column:
