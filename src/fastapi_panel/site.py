@@ -207,6 +207,7 @@ class AdminSite:
             self._route("/{slug}", self._model_view(views.changelist), methods=["GET", "POST"]),
             self._route("/{slug}/add", self._model_view(views.change_form), methods=["GET", "POST"]),
             self._route("/{slug}/autocomplete", self._model_view(views.autocomplete)),
+            self._route("/{slug}/deleted", self._model_view(views.trash), methods=["GET", "POST"]),
             self._route("/{slug}/{pk}/change", self._object_view(views.change_form), methods=["GET", "POST"]),
             self._route("/{slug}/{pk}/delete", self._object_view(views.delete_view), methods=["GET", "POST"]),
             self._route("/{slug}/{pk}/history", self._object_view(views.history_view)),
@@ -241,6 +242,7 @@ class AdminSite:
         before = dict(session_data)
         request.state.user = None
         request.state.form = None
+        request.state.trash = False
         request.state.relation_options = {}
         try:
             if request.method == "POST":

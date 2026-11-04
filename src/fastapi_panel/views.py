@@ -125,10 +125,37 @@ def changelist(session: Any, request: Any, admin: ModelAdmin) -> Response:
     return _render_changelist(session, request, admin)
 
 
+def trash(session: Any, request: Any, admin: ModelAdmin) -> Response:
+    if not admin.soft_delete_field:
+        raise HTTPException(404, "Not found.")
+    admin.require(admin.can_see_deleted(request))
+    request.state.trash = True
+    if request.method == "GET":
+        return _render_changelist(session, request, admin)
+    data = request.state.form
+    if "_restore" not in data:
+        return _run_action(session, request, admin)
+    admin.require(admin.has_change_permission(request))
+    restore_objects(session, request, admin, [admin.get_object(session, request, str(data["_restore"]))])
+    session.commit()
+    return redirect(request.url.path + (f"?{request.url.query}" if request.url.query else ""))
+
+
+def restore_objects(session: Any, request: Any, admin: ModelAdmin, objects: list[Any]) -> None:
+    admin.require(all(admin.has_change_permission(request, obj) for obj in objects))
+    for obj in objects:
+        admin.restore_model(session, request, obj)
+        record(session, request, admin, obj, "restore")
+    session.flush()
+    word = admin.name if len(objects) == 1 else admin.name_plural
+    admin.message_user(request, f"Restored {len(objects)} {word.lower()}.")
+
+
 def _render_changelist(
     session: Any, request: Any, admin: ModelAdmin, list_forms: dict[str, Form] | None = None
 ) -> Response:
     params = request.query_params
+    in_trash = request.state.trash
     columns = admin.get_list_display(request)
     base = admin.get_queryset(request)
     stmt = _filtered_statement(request, admin)
@@ -146,8 +173,10 @@ def _render_changelist(
     objects = list(session.scalars(admin.eager_load(ordered, request).limit(per_page).offset((page - 1) * per_page)))
 
     can_change = admin.has_change_permission(request)
-    editable = set(admin.list_editable) if can_change else set()
+    editable = set(admin.list_editable) if can_change and not in_trash else set()
     link_columns = set(admin.list_display_links) if admin.list_display_links is not None else {columns[0]}
+    if in_trash:
+        link_columns = set()
     filters_qs = quote(request.url.query, safe="")
     forms = list_forms or {}
     rows = []
@@ -207,13 +236,22 @@ def _render_changelist(
         date_links = hierarchy.links(session, stmt, params, lambda **kw: _query_url(request, **kw))
 
     actions = admin.get_actions(request)
+    list_url = f"{_root(request)}/{admin.slug}"
+    title = f"Deleted {admin.name_plural.lower()}" if in_trash else admin.name_plural
+    crumbs = [("Home", f"{_root(request)}/"), (admin.name_plural, list_url if in_trash else None)]
+    if in_trash:
+        crumbs.append(("Deleted", None))
     return admin.site.render(
         request,
         admin.list_template,
         {
             "admin": admin,
-            "title": admin.name_plural,
-            "crumbs": [("Home", f"{_root(request)}/"), (admin.name_plural, None)],
+            "title": title,
+            "crumbs": crumbs,
+            "trash": in_trash,
+            "list_url": list_url,
+            "trash_url": f"{list_url}/deleted" if admin.can_see_deleted(request) and not in_trash else None,
+            "can_restore": in_trash and can_change,
             "headers": headers,
             "rows": rows,
             "total": total,
@@ -228,14 +266,14 @@ def _render_changelist(
             "next_url": _query_url(request, page=page + 1) if page < last_page else None,
             "filters": filters,
             "any_filter_active": any(f["active"] for f in filters),
-            "clear_filters_url": f"{_root(request)}/{admin.slug}",
+            "clear_filters_url": f"{list_url}/deleted" if in_trash else list_url,
             "date_links": date_links,
             "query": params.get("q", ""),
             "hidden_params": [(k, v) for k, v in params.multi_items() if k not in ("q", "page")],
             "actions": actions,
             "editable": bool(editable),
-            "can_add": admin.has_add_permission(request),
-            "add_url": f"{_root(request)}/{admin.slug}/add",
+            "can_add": admin.has_add_permission(request) and not in_trash,
+            "add_url": f"{list_url}/add",
             "post_url": request.url.path + (f"?{request.url.query}" if request.url.query else ""),
             "per_page": per_page,
         },
@@ -558,7 +596,8 @@ def delete_view(session: Any, request: Any, admin: ModelAdmin, pk: str) -> Respo
                 request, f"“{label}” can't be deleted because other records still depend on it.", "error"
             )
             return redirect(f"{_root(request)}/{admin.slug}/{_url_pk(obj)}/change")
-        admin.message_user(request, f"The {admin.name.lower()} “{label}” was deleted.")
+        note = " You can restore it from Deleted." if admin.soft_deletes(request) else ""
+        admin.message_user(request, f"The {admin.name.lower()} “{label}” was deleted.{note}")
         return redirect(_list_url(request, admin))
     return admin.site.render(
         request,
@@ -570,7 +609,8 @@ def delete_view(session: Any, request: Any, admin: ModelAdmin, pk: str) -> Respo
                 request, admin, (label, f"{_root(request)}/{admin.slug}/{_url_pk(obj)}/change"), ("Delete", None)
             ),
             "labels": [label],
-            "related": collect_related(session, obj),
+            "related": [] if admin.soft_deletes(request) else collect_related(session, obj),
+            "soft": admin.soft_deletes(request),
             "cancel_url": f"{_root(request)}/{admin.slug}/{_url_pk(obj)}/change",
             "post_url": request.url.path + (f"?{request.url.query}" if request.url.query else ""),
             "hidden": [],
@@ -596,12 +636,12 @@ def delete_selected(session: Any, request: Any, admin: ModelAdmin, objects: list
     else:
         hidden += [("_selected", pk_string(obj)) for obj in objects]
     related: dict[str, dict[str, Any]] = {}
-    for obj in objects[:MAX_RELATED_LISTED]:
+    for obj in [] if admin.soft_deletes(request) else objects[:MAX_RELATED_LISTED]:
         for entry in collect_related(session, obj):
             merged = related.setdefault(entry["name"], {"name": entry["name"], "count": 0, "items": []})
             merged["count"] += entry["count"]
             merged["items"] = (merged["items"] + entry["items"])[:MAX_RELATED_LISTED]
-    back = f"{_root(request)}/{admin.slug}" + (f"?{request.url.query}" if request.url.query else "")
+    back = request.url.path + (f"?{request.url.query}" if request.url.query else "")
     word = admin.name if len(objects) == 1 else admin.name_plural
     return admin.site.render(
         request,
@@ -613,6 +653,7 @@ def delete_selected(session: Any, request: Any, admin: ModelAdmin, objects: list
             "labels": [object_label(o) for o in objects[:MAX_RELATED_LISTED]],
             "extra_count": max(0, len(objects) - MAX_RELATED_LISTED),
             "related": list(related.values()),
+            "soft": admin.soft_deletes(request),
             "cancel_url": back,
             "post_url": back,
             "hidden": hidden,

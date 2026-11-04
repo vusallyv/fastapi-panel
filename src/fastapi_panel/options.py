@@ -11,7 +11,7 @@ from typing import Any
 
 import pydantic
 from markupsafe import Markup
-from sqlalchemy import inspect, or_, select
+from sqlalchemy import Boolean, DateTime, inspect, or_, select
 from sqlalchemy.exc import NoInspectionAvailable
 from sqlalchemy.orm import selectinload
 from starlette.exceptions import HTTPException
@@ -375,6 +375,9 @@ class ModelAdmin(FormOptions):
     save_as = False
     save_on_top = False
 
+    # A column that marks a row as deleted: a nullable datetime or a boolean. Deletes then only set it.
+    soft_delete_field: str | None = None
+
     # Navigation
     group: str | None = None
     slug: str
@@ -421,7 +424,13 @@ class ModelAdmin(FormOptions):
 
     def get_queryset(self, request: Any) -> Any:
         """Rows this request may reach. Every view goes through it, so it's the place for row-level scoping."""
-        return select(self.model)
+        stmt = select(self.model)
+        if not self.soft_delete_field:
+            return stmt
+        column = getattr(self.model, self.soft_delete_field)
+        if isinstance(column.type, Boolean):
+            return stmt.where(column.is_(True) if request.state.trash else column.is_not(True))
+        return stmt.where(column.is_not(None) if request.state.trash else column.is_(None))
 
     def get_object(self, session: Any, request: Any, pk: str) -> Any:
         try:
@@ -472,6 +481,9 @@ class ModelAdmin(FormOptions):
 
     # Forms
 
+    def get_fields(self, request: Any, obj: Any = None) -> list[Any]:
+        return [name for name in super().get_fields(request, obj) if name != self.soft_delete_field]
+
     def get_fieldsets(self, request: Any, obj: Any = None) -> list[tuple[str | None, dict[str, Any]]]:
         if self.fieldsets is not None:
             return list(self.fieldsets)
@@ -515,7 +527,28 @@ class ModelAdmin(FormOptions):
         session.add(obj)
 
     def delete_model(self, session: Any, request: Any, obj: Any) -> None:
-        session.delete(obj)
+        if not self.soft_deletes(request):
+            session.delete(obj)
+            return
+        column = getattr(self.model, self.soft_delete_field)
+        if isinstance(column.type, Boolean):
+            setattr(obj, self.soft_delete_field, True)
+        else:
+            now = dt.datetime.now(dt.timezone.utc)
+            setattr(obj, self.soft_delete_field, now if column.type.timezone else now.replace(tzinfo=None))
+
+    def restore_model(self, session: Any, request: Any, obj: Any) -> None:
+        column = getattr(self.model, self.soft_delete_field)
+        setattr(obj, self.soft_delete_field, False if isinstance(column.type, Boolean) else None)
+
+    def soft_deletes(self, request: Any) -> bool:
+        """Whether deleting right now keeps the row. On the deleted items page, deleting is for good."""
+        return bool(self.soft_delete_field) and not request.state.trash
+
+    def can_see_deleted(self, request: Any) -> bool:
+        if not self.soft_delete_field:
+            return False
+        return self.has_change_permission(request) or self.has_delete_permission(request)
 
     def message_user(self, request: Any, text: str, level: str = "success") -> None:
         self.site.message(request, text, level)
@@ -524,7 +557,10 @@ class ModelAdmin(FormOptions):
 
     def get_actions(self, request: Any) -> dict[str, dict[str, Any]]:
         found: dict[str, dict[str, Any]] = {}
-        for spec in (*self.actions, *self.builtin_actions):
+        specs = (
+            ("restore_selected", "delete_selected") if request.state.trash else (*self.actions, *self.builtin_actions)
+        )
+        for spec in specs:
             name = spec if isinstance(spec, str) else spec.__name__
             fn = getattr(self, spec) if isinstance(spec, str) else (lambda *a, _f=spec: _f(self, *a))
             source = getattr(type(self), spec) if isinstance(spec, str) else spec
@@ -536,6 +572,8 @@ class ModelAdmin(FormOptions):
                 "description": getattr(source, "description", None) or humanize(name),
                 "confirm": getattr(source, "confirm", None),
             }
+        if request.state.trash and "delete_selected" in found:
+            found["delete_selected"]["description"] = "Delete selected permanently"
         return found
 
     @action("Delete selected", permissions=("delete",))
@@ -543,6 +581,12 @@ class ModelAdmin(FormOptions):
         from . import views
 
         return views.delete_selected(session, request, self, objects)
+
+    @action("Restore selected", permissions=("change",))
+    def restore_selected(self, session: Any, request: Any, objects: list[Any]) -> None:
+        from . import views
+
+        views.restore_objects(session, request, self, objects)
 
     @action("Export selected to CSV", permissions=("view",))
     def export_csv(self, session: Any, request: Any, objects: list[Any]) -> Response:
@@ -605,6 +649,14 @@ class ModelAdmin(FormOptions):
                 fail("ordering", spec)
         if self.date_hierarchy and self.date_hierarchy not in attrs:
             fail("date_hierarchy", self.date_hierarchy)
+        if self.soft_delete_field:
+            column = inspect(self.model).column_attrs.get(self.soft_delete_field)
+            kind = column.columns[0] if column else None
+            usable = kind is not None and (
+                isinstance(kind.type, Boolean) or (isinstance(kind.type, DateTime) and kind.nullable)
+            )
+            if not usable:
+                fail("soft_delete_field", self.soft_delete_field)
         available, _ = self._available_fields()
         for spec in (*self.actions, *self.builtin_actions):
             if isinstance(spec, str) and not callable(getattr(self, spec, None)):

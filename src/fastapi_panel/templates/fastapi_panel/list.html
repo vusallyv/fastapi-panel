@@ -3,7 +3,11 @@
 {% block content %}
 <div class="page-head">
   <h1 class="page-title">{{ title }}</h1>
-  {% if can_add %}<a class="button button-primary" href="{{ add_url }}">+ Add {{ admin.name.lower() }}</a>{% endif %}
+  <div class="page-links">
+    {% if trash_url %}<a class="button" href="{{ trash_url }}">Deleted</a>{% endif %}
+    {% if trash %}<a class="button" href="{{ list_url }}">&lsaquo; Back to {{ admin.name_plural.lower() }}</a>{% endif %}
+    {% if can_add %}<a class="button button-primary" href="{{ add_url }}">+ Add {{ admin.name.lower() }}</a>{% endif %}
+  </div>
 </div>
 
 <div class="changelist{% if filters %} has-filters{% endif %}">
@@ -57,6 +61,7 @@
                 {% else %}{{ header.label }}{% endif %}
               </th>
               {% endfor %}
+              {% if can_restore %}<th scope="col"><span class="sr-only">Restore</span></th>{% endif %}
             </tr>
           </thead>
           <tbody>
@@ -73,9 +78,10 @@
                 {% else %}{{ cell.value }}{% endif %}
               </td>
               {% endfor %}
+              {% if can_restore %}<td class="align-end"><button class="button button-small" type="submit" name="_restore" value="{{ row.pk }}">Restore</button></td>{% endif %}
             </tr>
             {% else %}
-            <tr><td class="empty" colspan="{{ headers|length + 1 }}">
+            <tr><td class="empty" colspan="{{ headers|length + 2 }}">
               {% if query or any_filter_active %}Nothing matches. <a href="{{ clear_filters_url }}">Clear the search and filters</a>.
               {% else %}No {{ title.lower() }} yet.{% endif %}
             </td></tr>
