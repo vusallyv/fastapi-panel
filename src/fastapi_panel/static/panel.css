@@ -216,7 +216,7 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent);
 
 /* Tables */
 .table-wrap { overflow-x: auto; }
-.table { width: 100%; border-collapse: collapse; }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .table th, .table td {
   text-align: start; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle;
 }
@@ -229,7 +229,8 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent);
 .table tbody tr:last-child > * { border-bottom: 0; }
 .table-list tbody tr:hover { background: var(--surface-alt); }
 .table-list tbody tr.selected { background: var(--accent-soft); }
-.table-list input:not([type="checkbox"]), .table-list select { width: 120px; }
+.table-list th, .table-list td { padding-block: 6px; }
+.table-list input:not([type="checkbox"]), .table-list select { width: 120px; min-height: 28px; padding: 3px 8px; }
 .align-end { text-align: end !important; white-space: nowrap; }
 .col-check { width: 36px; padding-inline-end: 0 !important; }
 .empty { text-align: center !important; padding: 40px 16px !important; color: var(--muted); }
