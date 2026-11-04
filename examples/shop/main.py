@@ -118,4 +118,16 @@ async def home() -> dict[str, str]:
     return {"admin": "/admin"}
 
 
-site.mount(app, engine=engine, auth=ModelAuth(Staff, superuser_field="is_superuser"), secret_key=SECRET_KEY)
+def print_reset_link(user: Staff, url: str) -> None:
+    # Demo only. A real app emails this to the user.
+    print(f"Password reset link for {user.username}: {url}")
+
+
+site.mount(
+    app,
+    engine=engine,
+    auth=ModelAuth(Staff, superuser_field="is_superuser"),
+    secret_key=SECRET_KEY,
+    password_reset=print_reset_link,
+    public_url="http://127.0.0.1:8000/admin",
+)

@@ -1,6 +1,6 @@
 # Example shop
 
-A small store with products, categories, tags, customers and orders. It uses most features: list editing, custom filters, date drill-down, fieldsets, inlines, autocomplete, the **+** button, image uploads, CSV import, soft delete with restore, custom actions and permissions.
+A small store with products, categories, tags, customers and orders. It uses most features: list editing, custom filters, date drill-down, fieldsets, inlines, autocomplete, the **+** button, image uploads, rich text, saved filters, values in the history, CSV import, soft delete with restore, custom actions and permissions. The password reset link is printed to the console instead of emailed.
 
 ```bash
 # from the repository root

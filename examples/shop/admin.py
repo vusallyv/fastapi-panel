@@ -8,6 +8,7 @@ from fastapi_panel import (
     ImageField,
     LocalStorage,
     ModelAdmin,
+    RichTextField,
     SimpleFilter,
     TabularInline,
     ValidationError,
@@ -52,9 +53,11 @@ class ProductAdmin(ModelAdmin):
     actions = ("publish", "unpublish")
     soft_delete_field = "deleted_at"
     csv_import = True
+    log_values = ("price", "stock", "is_published")
     field_overrides = {
         "price": DecimalField(min_value=Decimal(0), max_digits=10, decimal_places=2),
         "image": ImageField(help_text="PNG, JPG, GIF or WEBP, up to 5 MB."),
+        "description": RichTextField(),
     }
     fieldsets = (
         (None, {"fields": ("name", "slug", "category", "image")}),

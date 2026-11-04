@@ -103,9 +103,6 @@ def main() -> int:
         page.wait_for_selector(".message-success")
         assert page.locator("[data-inline-row]").count() >= before + 1
 
-        page.goto(f"{BASE}/order/1/history")
-        shot("history")
-
         page.goto(f"{BASE}/order/1/delete")
         shot("delete")
 
@@ -197,6 +194,63 @@ def main() -> int:
         page.locator("button[name=_restore]").first.click()
         page.wait_for_selector(".message-success")
         assert page.locator("button[name=_restore]").count() == 1
+
+        # The rich text editor: formatting and a link go through the toolbar and survive a save.
+        page.goto(f"{BASE}/product/2/change")
+        page.locator("details.fieldset summary").click()
+        editor = page.locator(".rich-editor")
+        editor.click()
+        page.keyboard.press("ControlOrMeta+A")
+        page.keyboard.type("Made to last for years.")
+        page.keyboard.press("ControlOrMeta+A")
+        page.click("button[aria-label=Bold]")
+        page.click("button[aria-label=Link]")
+        page.fill(".rich-link input", "example.com/care")
+        page.keyboard.press("Enter")
+        page.wait_for_selector(".rich-editor a")
+        shot("rich-text", full_page=True)
+        page.click("button[name=_continue]")
+        page.wait_for_selector(".message-success")
+        saved = page.locator(".rich-editor").inner_html()
+        assert "<strong>" in saved and 'href="https://example.com/care"' in saved, saved
+
+        # Old and new values in the history, for the fields listed in log_values.
+        page.fill("#id_price", "12.50")
+        page.click("button[name=_continue]")
+        page.wait_for_selector(".message-success")
+        page.goto(f"{BASE}/product/2/history")
+        assert "→ 12.50" in page.inner_text(".card")
+        shot("history")
+
+        # A saved filter: keep this view, then open it again from the list.
+        page.goto(f"{BASE}/product?is_published=1&stock_level=low")
+        page.locator(".save-filter summary").click()
+        page.fill(".save-filter input[name=name]", "Low stock, live")
+        page.click(".save-filter button")
+        page.wait_for_selector(".message-success")
+        page.goto(f"{BASE}/product")
+        page.locator(".saved-filters").get_by_text("Low stock, live").click()
+        page.wait_for_url("**stock_level=low**")
+        assert page.locator(".chip-active").count() == 1
+        shot("saved-filters")
+
+        # Everyone's activity, with filters.
+        page.goto(f"{BASE}/activity")
+        shot("activity")
+        page.select_option("#activity-action", "delete")
+        page.click(".activity-filters button")
+        page.wait_for_url("**action=delete**")
+        assert page.locator(".tag-delete").count() >= 1 and page.locator("tbody .tag-add").count() == 0
+
+        # Forgotten password, from a browser that isn't logged in.
+        visitor = browser.new_context(locale="en-US").new_page()
+        visitor.on("console", lambda m: problems.append(m.text) if m.type == "error" else None)
+        visitor.goto(f"{BASE}/login")
+        visitor.click("text=Forgot your password?")
+        visitor.fill("#username", "admin")
+        visitor.click("button[type=submit]")
+        visitor.wait_for_selector(".message-success")
+        visitor.close()
 
         page.goto(f"{BASE}/")
         shot("dashboard")
