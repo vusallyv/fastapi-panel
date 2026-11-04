@@ -552,6 +552,12 @@ def change_form(session: Any, request: Any, admin: ModelAdmin, pk: str | None = 
 
 def _after_save(request: Any, admin: ModelAdmin, obj: Any, data: Any, created: bool) -> Response:
     label = object_label(obj)
+    if request.query_params.get("_popup"):
+        return admin.site.render(
+            request,
+            "fastapi_panel/popup_done.html",
+            {"title": "Saved", "new_id": str(getattr(obj, pk_keys(admin.model)[0])), "new_label": label},
+        )
     verb = "added" if created else "changed"
     admin.message_user(request, f"The {admin.name.lower()} “{label}” was {verb} successfully.")
     if "_continue" in data or "_saveasnew" in data:

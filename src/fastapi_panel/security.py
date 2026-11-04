@@ -127,7 +127,7 @@ class LimitBody:
 SECURITY_HEADERS = {
     "Content-Security-Policy": (
         "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; "
-        "font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; "
+        "font-src 'self'; connect-src 'self'; frame-src 'self'; form-action 'self'; base-uri 'none'; "
         "frame-ancestors 'none'"
     ),
     "X-Content-Type-Options": "nosniff",

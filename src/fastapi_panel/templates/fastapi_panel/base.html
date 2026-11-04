@@ -14,6 +14,7 @@
 <body>
 {% block body %}
 <div class="layout">
+  {% if not popup %}
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-inner">
     <a class="brand" href="{{ root }}/"><span class="brand-mark" aria-hidden="true">{{ site.header[:1] }}</span>{{ site.header }}</a>
@@ -35,8 +36,10 @@
     </nav>
     </div>
   </aside>
+  {% endif %}
 
   <div class="main">
+    {% if not popup %}
     <header class="topbar">
       <button class="icon-button menu-button" type="button" data-toggle-sidebar aria-controls="sidebar" aria-label="Toggle menu">&#9776;</button>
       {% if crumbs %}
@@ -58,6 +61,7 @@
         {% endif %}
       </div>
     </header>
+    {% endif %}
 
     <main class="content">
       {% for message in messages %}

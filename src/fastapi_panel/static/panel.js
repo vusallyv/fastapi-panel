@@ -153,6 +153,8 @@ function setupAutocomplete(root = document) {
       chips.append(chip);
     };
 
+    box.addEventListener("panel:choose", (event) => addChip(event.detail.id, event.detail.label));
+
     chips.addEventListener("click", (event) => {
       if (event.target.matches("[data-remove]")) event.target.closest("[data-chip]").remove();
     });
@@ -257,6 +259,7 @@ function setupDualSelects(root = document) {
     });
 
     filter.addEventListener("input", render);
+    select.addEventListener("change", render);
     filter.addEventListener("keydown", (event) => {
       if (event.key === "Enter") event.preventDefault();
     });
@@ -285,6 +288,79 @@ function setupFileFields(root = document) {
       preview.hidden = !showPreview;
       if (showPreview) preview.src = URL.createObjectURL(file);
     });
+  });
+}
+
+function chooseCreated(button, id, label) {
+  const box = button.closest("[data-related]");
+  const search = $("[data-autocomplete]", box);
+  if (search) {
+    search.dispatchEvent(new CustomEvent("panel:choose", { detail: { id, label } }));
+    return;
+  }
+  const url = button.dataset.relatedAdd;
+  // Every dropdown for this model gets the new option, such as the other rows of an inline.
+  $$("[data-related-add]")
+    .filter((other) => other.dataset.relatedAdd === url)
+    .forEach((other) => {
+      const select = $("select", other.closest("[data-related]"));
+      if (select && ![...select.options].some((option) => option.value === id)) select.add(new Option(label, id));
+    });
+  const select = $("select", box);
+  if (select) {
+    [...select.options].find((option) => option.value === id).selected = true;
+    select.dispatchEvent(new Event("change"));
+  } else {
+    $("input", box).value = id;
+  }
+}
+
+function setupRelatedAdd() {
+  const result = $("[data-popup-result]");
+  if (result) {
+    const { id, label } = result.dataset;
+    window.parent.postMessage({ type: "panel-created", id, label }, location.origin);
+    return;
+  }
+  $("[data-popup-cancel]")?.addEventListener("click", () => {
+    window.parent.postMessage({ type: "panel-cancel" }, location.origin);
+  });
+
+  let open = null;
+
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-related-add]");
+    if (!button) return;
+    const dialog = document.createElement("dialog");
+    dialog.className = "modal";
+    const head = document.createElement("div");
+    head.className = "modal-head";
+    const title = document.createElement("strong");
+    title.textContent = button.dataset.relatedTitle;
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "link-button";
+    close.textContent = "×";
+    close.setAttribute("aria-label", "Close");
+    close.addEventListener("click", () => dialog.close());
+    head.append(title, close);
+    const frame = document.createElement("iframe");
+    frame.title = button.dataset.relatedTitle;
+    frame.src = button.dataset.relatedAdd;
+    dialog.append(head, frame);
+    dialog.addEventListener("close", () => {
+      dialog.remove();
+      open = null;
+    });
+    document.body.append(dialog);
+    dialog.showModal();
+    open = { dialog, frame, button };
+  });
+
+  window.addEventListener("message", (event) => {
+    if (!open || event.origin !== location.origin || event.source !== open.frame.contentWindow) return;
+    if (event.data?.type === "panel-created") chooseCreated(open.button, event.data.id, event.data.label);
+    if (event.data?.type === "panel-created" || event.data?.type === "panel-cancel") open.dialog.close();
   });
 }
 
@@ -325,3 +401,4 @@ setupAutocomplete();
 setupDualSelects();
 setupFileFields();
 setupInlines();
+setupRelatedAdd();

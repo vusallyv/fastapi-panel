@@ -5,10 +5,14 @@
 {% if can_save %}
 <div class="submit-row{% if top %} submit-row-top{% endif %}">
   <button class="button button-primary" type="submit" name="_save" value="1">Save</button>
+  {% if popup %}
+  <button class="button" type="button" data-popup-cancel>Cancel</button>
+  {% else %}
   <button class="button" type="submit" name="_continue" value="1">Save and continue editing</button>
   {% if can_add %}<button class="button" type="submit" name="_addanother" value="1">Save and add another</button>{% endif %}
   {% if save_as %}<button class="button" type="submit" name="_saveasnew" value="1">Save as new</button>{% endif %}
   {% if can_delete %}<a class="button button-danger push-end" href="{{ delete_url }}">Delete</a>{% endif %}
+  {% endif %}
 </div>
 {% endif %}
 {% endmacro %}
@@ -49,6 +53,7 @@
 {% endmacro %}
 
 {% block content %}
+{% if not popup %}
 <div class="page-head">
   <h1 class="page-title">{{ title }}</h1>
   <div class="page-links">
@@ -56,6 +61,7 @@
     {% if view_on_site %}<a class="button" href="{{ view_on_site }}" rel="noopener noreferrer" target="_blank">View on site</a>{% endif %}
   </div>
 </div>
+{% endif %}
 
 <form method="post" action="{{ post_url }}" enctype="multipart/form-data" novalidate data-change-form>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

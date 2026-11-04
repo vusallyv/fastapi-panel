@@ -275,6 +275,13 @@ class AdminSite:
             response = self._error_page(request, exc.status_code, exc.detail)
         finally:
             await request.close()
+        if _is_popup(request) and request.url.path.endswith("/add"):
+            # Only the add form opens in the panel's own dialog. Everything else still refuses to be framed.
+            policy = SECURITY_HEADERS["Content-Security-Policy"]
+            response.headers["Content-Security-Policy"] = policy.replace(
+                "frame-ancestors 'none'", "frame-ancestors 'self'"
+            )
+            response.headers["X-Frame-Options"] = "SAMEORIGIN"
         for name, value in SECURITY_HEADERS.items():
             response.headers.setdefault(name, value)
         if request.state.session != before or not request.cookies.get(COOKIE_NAME):
@@ -390,6 +397,7 @@ class AdminSite:
                 "csrf_token": session_data["csrf"],
                 "messages": messages,
                 "user": user,
+                "popup": _is_popup(request),
                 "user_label": self.auth.user_label(user) if user is not None else "",
                 "can_change_password": self.auth.can_change_password,
                 "nav": self._navigation(request) if user is not None else [],
@@ -552,6 +560,10 @@ class AdminSite:
         self.auth.set_password(session, user, password)
         session.commit()
         return user
+
+
+def _is_popup(request: Request) -> bool:
+    return bool(request.query_params.get("_popup"))
 
 
 def _raise_not_found(session: Any, request: Request) -> Response:

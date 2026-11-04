@@ -1,6 +1,15 @@
 {% macro attrs(field) %}{% for key, value in field.attrs.items() %} {{ key }}="{{ value }}"{% endfor %}{% endmacro %}
 
 {% macro widget(field) %}
+{% if field.add_url %}
+<div class="related" data-related>
+  {{ control(field) }}
+  <button class="button related-add" type="button" data-related-add="{{ field.add_url }}" data-related-title="Add {{ field.add_label }}" aria-label="Add {{ field.add_label }}" title="Add {{ field.add_label }}">+</button>
+</div>
+{% else %}{{ control(field) }}{% endif %}
+{% endmacro %}
+
+{% macro control(field) %}
 {% set describedby = field.html_name ~ "-help" if field.help_text else "" %}
 {% if field.widget == "readonly" %}
   <div class="readonly">{{ field.display }}</div>

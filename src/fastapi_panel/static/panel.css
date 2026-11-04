@@ -93,6 +93,18 @@ ul { list-style: none; margin: 0; padding: 0; }
   clip-path: inset(50%); white-space: nowrap;
 }
 
+/* Adding a related record */
+.related { display: flex; align-items: flex-start; gap: 6px; }
+.related > :first-child { flex: 1; min-width: 0; }
+.related-add { flex: none; width: 34px; padding: 0; font-size: 16px; }
+.modal[open] {
+  display: flex; flex-direction: column; width: min(760px, 94vw); height: min(85vh, 760px); padding: 0;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text);
+}
+.modal::backdrop { background: #0007; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.modal iframe { flex: 1; width: 100%; border: 0; background: var(--bg); }
+
 /* Files */
 .thumb { display: block; width: 32px; height: 32px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border); }
 .thumb-large { display: block; max-width: 160px; max-height: 120px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 8px; }

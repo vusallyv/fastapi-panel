@@ -430,6 +430,8 @@ class _RelationBase(Field):
         self.key = key
         self.mode = "select"
         self.autocomplete_url = ""
+        self.add_url = ""
+        self.add_label = ""
 
     @property
     def key_attr(self) -> Any:
@@ -439,13 +441,14 @@ class _RelationBase(Field):
         self._session = session
         self._queryset = site.queryset_for(self.target, request)
         related = site.admin_for_model(self.target)
-        can_search = (
-            related is not None
-            and related.search_fields
-            and inspect(self.target).primary_key == (self.key_attr.property.columns[0],)
-        )
-        if related is not None and can_search:
-            self.autocomplete_url = f"{request.scope['root_path']}/{related.slug}/autocomplete"
+        keyed_by_pk = inspect(self.target).primary_key == (self.key_attr.property.columns[0],)
+        if related is not None and keyed_by_pk:
+            root = request.scope["root_path"]
+            if related.search_fields:
+                self.autocomplete_url = f"{root}/{related.slug}/autocomplete"
+            if not request.query_params.get("_popup") and related.has_add_permission(request):
+                self.add_url = f"{root}/{related.slug}/add?_popup=1"
+                self.add_label = related.name.lower()
 
         if self.mode == "raw":
             self.widget = "input"
