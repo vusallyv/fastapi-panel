@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import hmac
 import importlib
 import inspect as inspect_module
@@ -40,7 +41,6 @@ from .security import MIN_PASSWORD_LENGTH, SECURITY_HEADERS, BodyTooLarge, Limit
 from .settings import LiveSettings, Setting, settings_view
 from .storage import Storage
 
-COOKIE_NAME = "fastapi_panel_session"
 RESERVED_SLUGS = {
     "login",
     "logout",
@@ -219,6 +219,7 @@ class AdminSite:
         self.public_url = (public_url or "").rstrip("/")
         self.db = Database(engine)
         self.auth = auth
+        self.cookie_name = session_cookie_name(secret_key)
         self.signer = Signer(secret_key)
         self.file_signer = Signer(secret_key, salt="files")
         self.reset_signer = Signer(secret_key, salt="password-reset")
@@ -304,6 +305,8 @@ class AdminSite:
         session_data = self._read_session(request)
         request.state.session = session_data
         before = dict(session_data)
+        # A missing, expired or badly signed cookie needs replacing, or forms get a token no later request can match.
+        session_data.setdefault("csrf", secrets.token_urlsafe(32))
         request.state.user = None
         request.state.form = None
         request.state.trash = False
@@ -332,24 +335,23 @@ class AdminSite:
             response.headers["X-Frame-Options"] = "SAMEORIGIN"
         for name, value in SECURITY_HEADERS.items():
             response.headers.setdefault(name, value)
-        if request.state.session != before or not request.cookies.get(COOKIE_NAME):
+        if request.state.session != before:
             self._write_session(request, response)
         return response
 
     def _read_session(self, request: Request) -> dict[str, Any]:
-        raw = request.cookies.get(COOKIE_NAME)
+        raw = request.cookies.get(self.cookie_name)
         data = self.signer.loads(raw) if raw else None
         if not isinstance(data, dict):
             data = {}
         if data.get("uid") and data.get("exp", 0) < time.time():
             data = {}
-        data.setdefault("csrf", secrets.token_urlsafe(32))
         return data
 
     def _write_session(self, request: Request, response: Response) -> None:
         secure = self.secure_cookies if self.secure_cookies is not None else request.url.scheme == "https"
         response.set_cookie(
-            COOKIE_NAME,
+            self.cookie_name,
             self.signer.dumps(request.state.session),
             max_age=self.session_age,
             path=request.scope["root_path"] or "/",
@@ -681,6 +683,12 @@ class AdminSite:
         if user is None or not self.auth.is_allowed(user):
             return None
         return user if hmac.compare_digest(self.auth.session_hash(user), str(payload.get("hash", ""))) else None
+
+
+def session_cookie_name(secret_key: str) -> str:
+    # Browsers ignore the port when matching cookies, so projects on one host need different names.
+    digest = hashlib.sha256(f"cookie-name:{secret_key}".encode()).hexdigest()[:8]
+    return f"fastapi_panel_session_{digest}"
 
 
 def _is_popup(request: Request) -> bool:

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import pytest
-from conftest import PASSWORD, Item, ItemAdmin, Owner, Panel, User, build_client
+from conftest import PASSWORD, SECRET, Item, ItemAdmin, Owner, Panel, User, build_client, csrf_of
 from fastapi import FastAPI
 from sqlalchemy import select
 from starlette.testclient import TestClient
 
 from fastapi_panel import AdminSite, ModelAuth, StaticAuth, hash_password
-from fastapi_panel.site import COOKIE_NAME, _is_safe_next
+from fastapi_panel.security import Signer
+from fastapi_panel.site import _is_safe_next, session_cookie_name
+
+COOKIE_NAME = session_cookie_name(SECRET)
 
 
 def test_every_page_requires_login(anon):
@@ -86,6 +89,48 @@ def test_tampered_session_cookie_is_ignored(panel):
     panel.client.cookies.clear()
     panel.client.cookies.set(COOKIE_NAME, f"{payload}x.{signature}", path="/admin")
     assert panel.get("/", follow_redirects=False).status_code == 303
+
+
+@pytest.mark.parametrize(
+    "stale",
+    [
+        Signer("another-project-on-localhost").dumps({"csrf": "theirs"}),
+        Signer(SECRET).dumps({"csrf": "old", "uid": "1", "hash": "x", "exp": 1}),
+    ],
+    ids=["signed with another key", "expired"],
+)
+def test_login_works_with_a_stale_cookie_in_the_browser(engine, stale):
+    _, app = build_client(engine)
+    client = TestClient(app, follow_redirects=False)
+    page = client.get("/admin/login", headers={"cookie": f"{COOKIE_NAME}={stale}"})
+    replaced = page.cookies[COOKIE_NAME]
+    client.cookies.clear()
+    response = client.post(
+        "/admin/login",
+        data={"username": "root", "password": PASSWORD, "csrf_token": csrf_of(page.text)},
+        headers={"cookie": f"{COOKIE_NAME}={replaced}"},
+    )
+    assert response.status_code == 303
+
+
+def test_projects_on_one_host_do_not_overwrite_each_others_session(engine):
+    _, app = build_client(engine)
+    other_site = AdminSite()
+    other_site.register(Item)
+    other_app = FastAPI()
+    other_site.mount(other_app, engine=engine, auth=ModelAuth(User), secret_key="y" * 40)
+    project, other = TestClient(app, follow_redirects=False), TestClient(other_app)
+
+    page = project.get("/admin/login")
+    # Browsers ignore the port when matching cookies, so both projects share one cookie jar on localhost.
+    other.cookies.update(project.cookies)
+    other.get("/admin/login")
+    project.cookies.update(other.cookies)
+
+    response = project.post(
+        "/admin/login", data={"username": "root", "password": PASSWORD, "csrf_token": csrf_of(page.text)}
+    )
+    assert response.status_code == 303
 
 
 def test_cookie_flags(anon):
@@ -273,5 +318,5 @@ def test_secret_rotation_ends_sessions(engine):
     other_site.register(Item)
     other_app = FastAPI()
     other_site.mount(other_app, engine=engine, auth=ModelAuth(User), secret_key="y" * 40)
-    other = TestClient(other_app, cookies={COOKIE_NAME: cookie})
+    other = TestClient(other_app, cookies={session_cookie_name("y" * 40): cookie})
     assert other.get("/admin/", follow_redirects=False).status_code == 303
