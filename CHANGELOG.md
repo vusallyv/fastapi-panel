@@ -15,6 +15,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ### Fixed
 
 - Adding a user from the panel failed because the password column wasn't on the form. Admins for the `ModelAuth` model now get a hashed **Password** field. Only superusers can replace an existing user's password
+- Logging in failed with a 403 until cookies were cleared if the browser held an expired session, or a session cookie signed with another key
+- Projects on one host, such as different ports on `localhost`, overwrote each other's session and failed forms with a 403. The session cookie name now depends on `secret_key`, so everyone is logged out once after upgrading
 
 ### Changed
 
