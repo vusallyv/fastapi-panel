@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-06
+
 ### Added
 
 - Staff groups: `ModelAuth(..., groups=True)` adds a page where superusers tick permissions per model and choose members. It creates `fastapi_panel_group` and `fastapi_panel_group_member`
