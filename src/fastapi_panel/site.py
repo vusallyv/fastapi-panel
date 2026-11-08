@@ -19,8 +19,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import FastAPI
 from jinja2 import ChoiceLoader, Environment, FileSystemLoader, PackageLoader, select_autoescape
-from sqlalchemy import inspect, select
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy import inspect, select, update
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from starlette.applications import Starlette
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
@@ -31,10 +31,10 @@ from starlette.responses import HTMLResponse, RedirectResponse, Response, Stream
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from . import __version__, imports, views
+from . import __version__, imports, two_factor, views
 from .db import Database
 from .groups import StaffGroupAdmin
-from .log import SETTINGS_SLUG, AdminLog, LiveSetting, SavedFilter, StaffGroup, StaffGroupMember
+from .log import SETTINGS_SLUG, AdminLog, LiveSetting, SavedFilter, StaffGroup, StaffGroupMember, TwoFactorDevice
 from .log import Base as PanelBase
 from .options import ImproperlyConfigured, ModelAdmin
 from .security import MIN_PASSWORD_LENGTH, SECURITY_HEADERS, BodyTooLarge, LimitBody, LoginThrottle, Signer
@@ -50,9 +50,12 @@ RESERVED_SLUGS = {
     "forgot-password",
     "reset-password",
     "activity",
+    "two-factor",
     SETTINGS_SLUG,
 }
 RESET_LINK_AGE = 3600
+# How long someone has to type their code after the password was right.
+TWO_FACTOR_PENDING_AGE = 300
 logger = logging.getLogger("fastapi_panel")
 INLINE_FILE_TYPES = {"png", "jpg", "jpeg", "gif", "webp"}
 FILE_CSP = "default-src 'none'; sandbox"
@@ -85,6 +88,7 @@ class AdminSite:
         self.storage = storage
         self._registry: dict[str, ModelAdmin] = {}
         self._pages: list[dict[str, Any]] = []
+        self._widgets: list[dict[str, Any]] = []
         self.settings: LiveSettings | None = None
         self._tables_ready = False
         self.templates = Environment(
@@ -175,6 +179,20 @@ class AdminSite:
 
         return decorate
 
+    def widget(
+        self, title: str, *, url: str | None = None, permission: str | None = None
+    ) -> Callable[[Callable], Callable]:
+        """Add a stat card to the dashboard. Called as `fn(session, request)`, it returns a number or short text.
+
+        `url` is a path inside the panel, like `"product?stock=low"`, that the card links to.
+        """
+
+        def decorate(fn: Callable) -> Callable:
+            self._widgets.append({"title": title, "url": url, "permission": permission, "view": fn})
+            return fn
+
+        return decorate
+
     def admin_for_model(self, model: type) -> ModelAdmin | None:
         return next((admin for admin in self._registry.values() if admin.model is model), None)
 
@@ -206,6 +224,7 @@ class AdminSite:
         max_body_size: int = 10 * 1024 * 1024,
         password_reset: Callable[[Any, str], Any] | None = None,
         public_url: str | None = None,
+        two_factor: bool = False,
     ) -> None:
         if len(secret_key) < MIN_SECRET_LENGTH:
             raise ValueError(
@@ -229,6 +248,8 @@ class AdminSite:
         self.max_body_size = max_body_size
         self.throttle = LoginThrottle()
         self.reset_throttle = LoginThrottle(max_attempts=3, window=RESET_LINK_AGE)
+        self.two_factor = two_factor
+        self.two_factor_throttle = LoginThrottle()
         if self.auth.groups and self.admin_for_model(StaffGroup) is None:
             self.register(StaffGroup, StaffGroupAdmin)
         for admin in self._registry.values():
@@ -254,6 +275,7 @@ class AdminSite:
             self._route("/", self._index),
             self._route("/login", self._login, methods=["GET", "POST"], public=True),
             self._route("/logout", self._logout, methods=["POST"]),
+            self._route("/two-factor", self._two_factor, methods=["GET", "POST"], public=True),
             self._route("/password", self._change_password, methods=["GET", "POST"]),
             self._route("/files/{token}", self._serve_file),
             self._route("/forgot-password", self._forgot_password, methods=["GET", "POST"], public=True),
@@ -311,6 +333,7 @@ class AdminSite:
         request.state.form = None
         request.state.trash = False
         request.state.relation_options = {}
+        request.state.label_keys = {}
         try:
             if request.method == "POST":
                 await self._guard_post(request)
@@ -393,8 +416,10 @@ class AdminSite:
             user is None
             or not self.auth.is_allowed(user)
             or not hmac.compare_digest(self.auth.session_hash(user), expected)
+            # Sessions from before two_factor was switched on must log in again.
+            or (self.two_factor and not session_data.get("mfa"))
         ):
-            for key in ("uid", "hash", "exp"):
+            for key in ("uid", "hash", "exp", "mfa"):
                 session_data.pop(key, None)
             return
         request.state.user = user
@@ -415,6 +440,8 @@ class AdminSite:
             tables += [StaffGroup.__table__, StaffGroupMember.__table__]
         if self.settings:
             tables.append(LiveSetting.__table__)
+        if self.two_factor:
+            tables.append(TwoFactorDevice.__table__)
         PanelBase.metadata.create_all(session.connection(), tables=tables)
         session.commit()
 
@@ -506,11 +533,28 @@ class AdminSite:
                 .limit(10)
             )
             recent = list(session.scalars(stmt))
+        user = request.state.user
+        widgets = [
+            self._widget_card(session, request, widget)
+            for widget in self._widgets
+            if not widget["permission"] or self.auth.has_perm(user, widget["permission"])
+        ]
         return self.render(
             request,
             "fastapi_panel/index.html",
-            {"title": self.index_title, "recent": recent, "registry": self._registry},
+            {"title": self.index_title, "recent": recent, "registry": self._registry, "widgets": widgets},
         )
+
+    def _widget_card(self, session: Any, request: Request, widget: dict[str, Any]) -> dict[str, Any]:
+        try:
+            value = _format_stat(widget["view"](session, request))
+        except Exception:
+            # Widgets are your code: one failing card shouldn't take the whole dashboard down.
+            logger.exception("Dashboard widget %r failed", widget["title"])
+            session.rollback()
+            value = "Unavailable"
+        url = f"{request.scope['root_path']}/{widget['url'].lstrip('/')}" if widget["url"] else None
+        return {"title": widget["title"], "value": value, "url": url}
 
     async def _login(self, request: Request) -> Response:
         root = request.scope["root_path"]
@@ -535,13 +579,9 @@ class AdminSite:
                 valid = await run_in_threadpool(self.auth.check_password, user, password)
                 if valid and user is not None and self.auth.is_allowed(user):
                     self.throttle.reset(key)
-                    # A new session, including a new CSRF token, so nothing set before login carries over.
-                    request.state.session = {
-                        "csrf": secrets.token_urlsafe(32),
-                        "uid": self.auth.user_id(user),
-                        "hash": self.auth.session_hash(user),
-                        "exp": time.time() + self.session_age,
-                    }
+                    if self.two_factor:
+                        return self._ask_for_code(request, user, target)
+                    self._start_session(request, user)
                     return RedirectResponse(target, status_code=303)
                 self.throttle.fail(key)
                 error = "Please enter a correct username and password."
@@ -552,6 +592,99 @@ class AdminSite:
             {"title": "Log in", "error": error, "username": username, "next": raw_next if target == raw_next else ""},
             status_code=status,
         )
+
+    def _start_session(self, request: Request, user: Any) -> None:
+        # A new session, including a new CSRF token, so nothing set before login carries over.
+        request.state.session = {
+            "csrf": secrets.token_urlsafe(32),
+            "uid": self.auth.user_id(user),
+            "hash": self.auth.session_hash(user),
+            "exp": time.time() + self.session_age,
+            "mfa": self.two_factor,
+        }
+
+    def _ask_for_code(self, request: Request, user: Any, target: str) -> Response:
+        # Not logged in yet: the session only remembers who passed the password, for a few minutes.
+        request.state.session = {
+            "csrf": secrets.token_urlsafe(32),
+            "pending": {
+                "uid": self.auth.user_id(user),
+                "hash": self.auth.session_hash(user),
+                "exp": time.time() + TWO_FACTOR_PENDING_AGE,
+                "next": target,
+            },
+        }
+        return RedirectResponse(f"{request.scope['root_path']}/two-factor", status_code=303)
+
+    async def _two_factor(self, request: Request) -> Response:
+        root = request.scope["root_path"]
+        if not self.two_factor:
+            raise HTTPException(404, "Not found.")
+        if request.state.user is not None:
+            return RedirectResponse(f"{root}/", status_code=303)
+        pending = request.state.session.get("pending")
+        user = await self._user_from_claim(pending)
+        if user is None:
+            request.state.session.pop("pending", None)
+            self.message(request, "That took too long. Log in again.", "error")
+            return RedirectResponse(f"{root}/login", status_code=303)
+        user_id = self.auth.user_id(user)
+        device = await self.db.run(self._find_device, user_id)
+        enrolling = device is None
+        if enrolling:
+            secret = pending.get("setup_secret") or two_factor.new_secret()
+            # A new dict, not an edit in place, so the session notices the change and saves it.
+            request.state.session["pending"] = {**pending, "setup_secret": secret}
+        else:
+            secret = device.secret
+
+        error = ""
+        status = 200
+        if request.method == "POST":
+            code = "".join(str(request.state.form.get("code", "")).split())[: two_factor.CODE_DIGITS + 1]
+            key = f"two-factor|{user_id}"
+            if self.two_factor_throttle.blocked(key):
+                error = "Too many failed attempts. Try again in a few minutes."
+                status = 429
+            else:
+                last_step = 0 if enrolling else device.last_step
+                step = two_factor.matching_step(secret, code, last_step) if code.isdigit() else None
+                if step is not None and await self.db.run(self._accept_code, user_id, secret, step, enrolling):
+                    self.two_factor_throttle.reset(key)
+                    target = str(pending.get("next") or f"{root}/")
+                    self._start_session(request, user)
+                    return RedirectResponse(target if _is_safe_next(target, root) else f"{root}/", status_code=303)
+                self.two_factor_throttle.fail(key)
+                error = "That code didn't work. Check the app and try the newest one."
+                status = 400
+
+        context: dict[str, Any] = {"title": "Two-factor authentication", "enrolling": enrolling, "error": error}
+        if enrolling:
+            uri = two_factor.setup_uri(secret, self.auth.user_label(user), self.header)
+            context |= {"qr_code": two_factor.qr_code_data_url(uri), "setup_key": two_factor.display_secret(secret)}
+        return self.render(request, "fastapi_panel/two_factor.html", context, status_code=status)
+
+    def _find_device(self, session: Any, user_id: str) -> TwoFactorDevice | None:
+        return session.get(TwoFactorDevice, user_id)
+
+    def _accept_code(self, session: Any, user_id: str, secret: str, step: int, enrolling: bool) -> bool:
+        if enrolling:
+            session.add(TwoFactorDevice(user_id=user_id, secret=secret, last_step=step))
+            try:
+                session.commit()
+            except IntegrityError:
+                # Set up in another tab meanwhile. That secret wins, so this code no longer counts.
+                session.rollback()
+                return False
+            return True
+        # Conditional, so two requests racing with the same code can't both log in.
+        result = session.execute(
+            update(TwoFactorDevice)
+            .where(TwoFactorDevice.user_id == user_id, TwoFactorDevice.last_step < step)
+            .values(last_step=step)
+        )
+        session.commit()
+        return result.rowcount == 1
 
     def file_url(self, request: Request, name: str) -> str:
         # Links are minted for someone who may see the record, and only work with a logged-in session.
@@ -676,19 +809,30 @@ class AdminSite:
         )
 
     async def _user_from_reset_token(self, token: str) -> Any | None:
-        payload = self.reset_signer.loads(token)
-        if not isinstance(payload, dict) or payload.get("exp", 0) < time.time():
+        return await self._user_from_claim(self.reset_signer.loads(token))
+
+    async def _user_from_claim(self, claim: object) -> Any | None:
+        """The user a signed `{uid, hash, exp}` claim names, if it hasn't expired and their password is unchanged."""
+        if not isinstance(claim, dict) or claim.get("exp", 0) < time.time():
             return None
-        user = await self.db.run(self.auth.get_user, str(payload.get("uid", "")))
+        user = await self.db.run(self.auth.get_user, str(claim.get("uid", "")))
         if user is None or not self.auth.is_allowed(user):
             return None
-        return user if hmac.compare_digest(self.auth.session_hash(user), str(payload.get("hash", ""))) else None
+        return user if hmac.compare_digest(self.auth.session_hash(user), str(claim.get("hash", ""))) else None
 
 
 def session_cookie_name(secret_key: str) -> str:
     # Browsers ignore the port when matching cookies, so projects on one host need different names.
     digest = hashlib.sha256(f"cookie-name:{secret_key}".encode()).hexdigest()[:8]
     return f"fastapi_panel_session_{digest}"
+
+
+def _format_stat(value: Any) -> str:
+    if value is None:
+        return "\u2014"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return f"{value:,}"
+    return str(value)
 
 
 def _is_popup(request: Request) -> bool:

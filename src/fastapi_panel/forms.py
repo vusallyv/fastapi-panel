@@ -27,6 +27,8 @@ from .security import MIN_PASSWORD_LENGTH
 SENSITIVE_NAME = re.compile(r"password|passwd|secret|token|api_?key|private_?key", re.I)
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 RELATION_SELECT_LIMIT = 200
+# Records a CSV import looks through for a name. More than one exact match is refused as ambiguous anyway.
+LABEL_SEARCH_LIMIT = 20
 IMAGE_SIGNATURES: dict[str, Callable[[bytes], bool]] = {
     "png": lambda head: head.startswith(b"\x89PNG\r\n\x1a\n"),
     "jpg": lambda head: head.startswith(b"\xff\xd8\xff"),
@@ -514,6 +516,9 @@ class _RelationBase(Field):
         self._session = session
         self._queryset = site.queryset_for(self.target, request)
         related = site.admin_for_model(self.target)
+        self._related = related
+        # Shared by every row of one CSV import, so each name is searched once.
+        self._label_keys = request.state.label_keys
         keyed_by_pk = inspect(self.target).primary_key == (self.key_attr.property.columns[0],)
         if related is not None and keyed_by_pk:
             root = request.scope["root_path"]
@@ -555,6 +560,22 @@ class _RelationBase(Field):
             found = self._session.scalars(self._queryset.where(column.in_(wanted)))
             known.update((str(getattr(o, self.key)), object_label(o)) for o in found)
         return [(v, known.get(v, v)) for v in values if v]
+
+    def search_key(self, label: str) -> str:
+        """For CSV import into a search box, which has no list of choices: the key of the one record shown as `label`.
+
+        Searches like the autocomplete does, then keeps exact label matches. No match, or several, returns
+        `label` unchanged, so validation reports it.
+        """
+        if not label.strip():
+            return label
+        cache_key = (self.target, label.lower())
+        if cache_key not in self._label_keys:
+            stmt = self._related.apply_search(self._queryset, label).limit(LABEL_SEARCH_LIMIT)
+            found = self._session.scalars(stmt)
+            matches = [str(getattr(o, self.key)) for o in found if object_label(o).lower() == label.lower()]
+            self._label_keys[cache_key] = matches[0] if len(matches) == 1 else label
+        return self._label_keys[cache_key]
 
     def _fetch(self, raw_values: list[str]) -> list[Any]:
         column = self.key_attr

@@ -4,6 +4,22 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-09
+
+### Added
+
+- Two-factor login: `mount(..., two_factor=True)` asks every staff member for an authenticator code after the password, with setup on their next login. `pip install "fastapi-panel[2fa]"` adds a QR code to the setup page. `python -m fastapi_panel reset-2fa` removes a lost device. It creates `fastapi_panel_two_factor`, and switching it on logs everyone out
+- Dashboard widgets: `@site.widget(title, url=..., permission=...)` adds a stat card to the dashboard
+- Leaving a change form with unsaved edits asks first
+
+### Changed
+
+- With autocomplete, the chosen items sit inside the search box, so the field is the height of a normal input and lines up with its row
+
+### Fixed
+
+- CSV import couldn't match names, like a category called "Home", for relations shown as a search box. That covers `autocomplete_fields` and any relation with more than 200 rows. It now searches the related admin for each name once per file, and refuses names that match nothing or more than one record
+
 ## [0.2.1] - 2026-11-06
 
 ### Added

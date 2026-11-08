@@ -1,6 +1,16 @@
 {% extends "fastapi_panel/base.html" %}
 {% block content %}
 <h1 class="page-title">{{ title }}</h1>
+{% if widgets %}
+<div class="stats">
+  {% for widget in widgets %}
+  {% if widget.url %}<a class="card stat" href="{{ widget.url }}">{% else %}<div class="card stat">{% endif %}
+    <span class="stat-title">{{ widget.title }}</span>
+    <span class="stat-value">{{ widget.value }}</span>
+  {% if widget.url %}</a>{% else %}</div>{% endif %}
+  {% endfor %}
+</div>
+{% endif %}
 <div class="dashboard">
   <div class="dashboard-groups">
     {% for group in nav %}

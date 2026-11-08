@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from markupsafe import Markup
 from models import Category, Customer, Order, OrderItem, OrderStatus, Product, Staff, Tag
+from sqlalchemy import func, select
 
 from fastapi_panel import (
     DecimalField,
@@ -30,6 +31,26 @@ shop_settings = site.live_settings(
 )
 
 
+@site.widget("Orders to ship", url="order?status=PAID", permission="order.view")
+def orders_to_ship(session, request):
+    return session.scalar(select(func.count()).where(Order.status == OrderStatus.PAID))
+
+
+@site.widget("Low stock products", url="product?stock_level=low", permission="product.view")
+def low_stock(session, request):
+    return session.scalar(select(func.count()).where(Product.stock > 0, Product.stock < 10))
+
+
+@site.widget("Revenue from shipped orders", permission="order.view")
+def revenue(session, request):
+    total = session.scalar(
+        select(func.sum(OrderItem.quantity * OrderItem.unit_price))
+        .join(Order)
+        .where(Order.status == OrderStatus.SHIPPED)
+    )
+    return f"${total or 0:,.2f}"
+
+
 class StockFilter(SimpleFilter):
     title = "Stock"
     parameter = "stock_level"
@@ -54,6 +75,7 @@ class ProductAdmin(ModelAdmin):
     date_hierarchy = "created_at"
     list_per_page = 20
     prepopulated_fields = {"slug": ("name",)}
+    autocomplete_fields = ("category",)
     filter_horizontal = ("tags",)
     readonly_fields = ("created_at",)
     save_as = True

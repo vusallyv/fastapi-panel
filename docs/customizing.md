@@ -146,6 +146,18 @@ class OrderAdmin(ModelAdmin):
         ...
 ```
 
+## Dashboard widgets
+
+Stat cards at the top of the dashboard. A widget takes `(session, request)` and returns a number or short text:
+
+```python
+@site.widget("Orders to ship", url="order?status=PAID", permission="order.view")
+def orders_to_ship(session, request):
+    return session.scalar(select(func.count()).where(Order.status == OrderStatus.PAID))
+```
+
+`url` is a path inside the panel the card links to, often a filtered list. `permission` hides the card from people without it. Whole numbers get thousands separators. If a widget raises, its card says "Unavailable", the error is logged, and the rest of the dashboard still loads.
+
 ## Templates
 
 Every template can be replaced. Files in `template_dirs` win over the built-in ones, so to change the login page create `templates/fastapi_panel/login.html`. You can also extend the original pieces, such as `base.html` and its `content` block.

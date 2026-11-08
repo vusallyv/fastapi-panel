@@ -299,6 +299,11 @@ input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent);
 .empty { text-align: center !important; padding: 40px 16px !important; color: var(--muted); }
 
 /* Dashboard */
+.stats { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); margin-bottom: 16px; }
+.stat { display: grid; gap: 4px; padding: 14px 16px; color: var(--text); text-decoration: none; }
+a.stat:hover { border-color: var(--accent); }
+.stat-title { font-size: 13px; color: var(--muted); }
+.stat-value { font-size: 24px; font-weight: 650; overflow-wrap: anywhere; }
 .dashboard { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .dashboard-groups { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); align-items: start; }
 .activity li { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; padding: 9px 16px; border-bottom: 1px solid var(--border); align-items: baseline; }
@@ -384,16 +389,25 @@ details.fieldset:not([open]) > summary { border-bottom: 0; border-radius: var(--
 .stacked-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px 0; }
 .inline-add { display: block; padding: 10px 16px; }
 
-.autocomplete { position: relative; max-width: 480px; }
-.autocomplete-chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.autocomplete-chips:not(:empty) { margin-bottom: 6px; }
+/* Chips sit inside the box on the search line, so the field keeps the height of a normal input */
+.autocomplete {
+  position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  width: 100%; max-width: 480px; min-height: 34px; padding: 3px 4px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--surface);
+}
+.autocomplete:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.field.has-error .autocomplete { border-color: var(--danger); }
+.autocomplete-chips { display: contents; }
+.autocomplete input[data-search] {
+  flex: 1 1 120px; width: auto; min-width: 0; min-height: 26px; padding: 2px 6px; border: 0; outline: 0;
+}
 .chip {
   display: inline-flex; align-items: center; gap: 4px; padding: 1px 4px 1px 9px; border-radius: 12px;
   background: var(--accent-soft); color: var(--accent); font-weight: 550;
 }
 .chip button { background: none; border: 0; color: inherit; cursor: pointer; font-size: 15px; padding: 0 3px; }
 .autocomplete-results {
-  position: absolute; z-index: 20; inset-inline: 0; margin-top: 2px; max-height: 240px; overflow-y: auto;
+  position: absolute; z-index: 20; inset-inline: 0; top: 100%; margin-top: 2px; max-height: 240px; overflow-y: auto;
   background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
   box-shadow: 0 6px 18px #0002;
 }
@@ -422,6 +436,8 @@ details.fieldset:not([open]) > summary { border-bottom: 0; border-radius: var(--
 .login-card .button { margin-top: 12px; }
 .login-card .message { margin-bottom: 4px; }
 .login-link { margin-top: 8px; text-align: center; font-size: 13px; }
+.two-factor-qr { justify-self: center; background: #fff; border-radius: 6px; }
+.two-factor-key { padding: 8px; text-align: center; font-size: 15px; letter-spacing: 1px; background: var(--surface-alt); border-radius: 6px; overflow-wrap: anywhere; user-select: all; }
 
 @media (max-width: 1000px) {
   .changelist.has-filters, .dashboard { grid-template-columns: minmax(0, 1fr); }

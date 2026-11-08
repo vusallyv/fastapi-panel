@@ -144,6 +144,30 @@ Without email, or if you've lost access, use the command line:
 python -m fastapi_panel changepassword main --username ana
 ```
 
+## Two-factor authentication
+
+Switch it on in `mount`, and every staff member needs a code from an authenticator app (Google Authenticator, 1Password, Authy...) after their password:
+
+```python
+site.mount(app, engine=engine, auth=auth, secret_key=SECRET_KEY, two_factor=True)
+```
+
+The first time someone logs in, the panel shows a QR code and a key to add to their app, and asks for one code to confirm it. After that, every login asks for the current code. Each code works once, and wrong codes are throttled like passwords. Switching it on logs everyone out, so nobody stays in without a code.
+
+The QR code needs one extra package. Without it, people type the key into the app by hand:
+
+```bash
+pip install "fastapi-panel[2fa]"
+```
+
+It works with every backend and stores devices in its own table, `fastapi_panel_two_factor`, keyed by user id. If someone loses their phone, remove their device, and they set up a new one at their next login:
+
+```bash
+python -m fastapi_panel reset-2fa main --username ana
+```
+
+Until someone has set it up, their password alone gets them to the setup page. Switch it on and ask everyone to log in soon after, so nobody with a leaked password gets there first.
+
 ## Sessions
 
 Sessions live in a signed cookie, so there's no session table. A session ends when it expires (`session_age`, 12 hours by default), on logout, when the password changes, or when the user is deactivated. The last two apply on the very next request.

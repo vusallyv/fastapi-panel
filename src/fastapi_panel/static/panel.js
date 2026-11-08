@@ -507,6 +507,29 @@ function setupInlines() {
   });
 }
 
+function formState(form) {
+  // Files count by name: enough to see that one was picked.
+  return new URLSearchParams(
+    [...new FormData(form)].map(([name, value]) => [name, typeof value === "string" ? value : value.name]),
+  ).toString();
+}
+
+function setupUnsavedWarning() {
+  const form = $("[data-change-form]");
+  if (!form) return;
+  // Compared with a snapshot, not set on any input, so typing in a search box or undoing an edit doesn't count.
+  const saved = formState(form);
+  let submitting = false;
+  form.addEventListener("submit", () => {
+    submitting = true;
+  });
+  window.addEventListener("beforeunload", (event) => {
+    if (submitting || formState(form) === saved) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+}
+
 setupChrome();
 setupChangelist();
 setupPrepopulate();
@@ -516,6 +539,8 @@ setupFileFields();
 setupRichText();
 setupInlines();
 setupRelatedAdd();
+// Last, so the snapshot sees fields the other setups filled in.
+setupUnsavedWarning();
 
 document.addEventListener("submit", (event) => {
   const message = event.target.dataset.confirm;

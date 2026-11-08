@@ -1,0 +1,22 @@
+{% extends "fastapi_panel/base.html" %}
+{% block body %}
+<main class="login">
+  <form class="login-card" method="post" action="{{ root }}/two-factor">
+    <h1>{{ site.header }}</h1>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% if error %}<div class="message message-error" role="alert">{{ error }}</div>{% endif %}
+    {% if enrolling %}
+    <p>This panel needs two-factor authentication. Scan the code with an authenticator app, such as Google Authenticator, 1Password or Authy.</p>
+    {% if qr_code %}<img class="two-factor-qr" src="{{ qr_code }}" alt="QR code for your authenticator app" width="180" height="180">{% endif %}
+    <p class="muted">{% if qr_code %}Can't scan it? {% endif %}Enter this key in the app:</p>
+    <code class="two-factor-key">{{ setup_key }}</code>
+    <label for="code">Then type the 6-digit code it shows</label>
+    {% else %}
+    <label for="code">Enter the 6-digit code from your authenticator app</label>
+    {% endif %}
+    <input id="code" name="code" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" autocomplete="one-time-code" autofocus required>
+    <button class="button button-primary" type="submit">{% if enrolling %}Turn on and log in{% else %}Verify{% endif %}</button>
+    <a class="login-link" href="{{ root }}/login">Back to login</a>
+  </form>
+</main>
+{% endblock %}

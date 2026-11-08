@@ -56,6 +56,37 @@ def test_custom_page_is_protected_and_listed(engine):
     assert "Sales report" in root.get("/").text
 
 
+def test_dashboard_widgets_respect_permissions_and_survive_errors(engine):
+    site = AdminSite()
+
+    @site.widget("Items in stock", url="item?active=1")
+    def in_stock(session, request):
+        return 12345
+
+    @site.widget("Revenue", permission="reports.view")
+    def revenue(session, request):
+        return "$9"
+
+    @site.widget("Broken")
+    def broken(session, request):
+        raise RuntimeError("boom")
+
+    app = FastAPI()
+    auth = ModelAuth(User, superuser_field="is_superuser", permissions_field="permissions")
+    site.mount(app, engine=engine, auth=auth, secret_key="x" * 40)
+
+    root = Panel(TestClient(app), engine)
+    root.login()
+    page = root.get("/").text
+    assert "12,345" in page and 'href="/admin/item?active=1"' in page
+    assert "$9" in page
+    assert "Unavailable" in page
+
+    viewer = Panel(TestClient(app), engine)
+    viewer.login("viewer")
+    assert "Revenue" not in viewer.get("/").text
+
+
 def test_model_routes(engine):
     class StatsAdmin(ModelAdmin):
         def get_routes(self):

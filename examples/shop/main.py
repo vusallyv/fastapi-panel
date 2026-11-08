@@ -134,4 +134,6 @@ site.mount(
     secret_key=SECRET_KEY,
     password_reset=print_reset_link,
     public_url="http://127.0.0.1:8000/admin",
+    # True asks every staff member for an authenticator code after the password.
+    two_factor=False,
 )

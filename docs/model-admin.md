@@ -267,7 +267,7 @@ class OrderAdmin(ModelAdmin):
         return found
 ```
 
-These use the same `@action` as bulk actions, but receive one object. The panel commits for you and writes the action to the record's history. Raising `ValidationError` undoes the changes and shows the message. Returning a `Response`, such as a file, sends that back instead of returning to the record. Unsaved edits on the page are lost when a button is clicked.
+These use the same `@action` as bulk actions, but receive one object. The panel commits for you and writes the action to the record's history. Raising `ValidationError` undoes the changes and shows the message. Returning a `Response`, such as a file, sends that back instead of returning to the record. Clicking a button with unsaved edits on the page asks before leaving, since those edits would be lost.
 
 `get_object_actions` is optional and decides which buttons a record gets. The same check runs when a button is posted, and `permissions` is checked for that record. A custom permission needs a `has_<name>_permission(self, request, obj=None)` method.
 

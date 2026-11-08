@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from .introspect import humanize, object_label, pk_string
@@ -69,6 +69,16 @@ class StaffGroupMember(Base):
 
     def __str__(self) -> str:
         return f"User {self.user_id}"
+
+
+class TwoFactorDevice(Base):
+    __tablename__ = "fastapi_panel_two_factor"
+
+    user_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    # shortcut: stored as plain base32 like most TOTP setups, encrypt it if your threat model includes database reads.
+    secret: Mapped[str] = mapped_column(String(64))
+    # The last time step a code was accepted for, so the same code can't be used twice.
+    last_step: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class LiveSetting(Base):

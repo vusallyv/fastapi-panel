@@ -41,11 +41,17 @@ def form_input(field: Any, text: str) -> Any:
     text = undo_csv_safe(text.strip())
     if isinstance(field, BooleanField):
         return "" if text.lower() in FALSE_WORDS else "on"
-    labels = {label.lower(): value for value, label in field.choices}
+    if field.widget == "autocomplete":
+        to_value = field.search_key
+    else:
+        labels = {label.lower(): value for value, label in field.choices}
+
+        def to_value(part: str) -> str:
+            return labels.get(part.lower(), part)
+
     if isinstance(field, ManyToManyField):
-        parts = [part.strip() for part in text.split(",") if part.strip()]
-        return [labels.get(part.lower(), part) for part in parts]
-    return labels.get(text.lower(), text)
+        return [to_value(part.strip()) for part in text.split(",") if part.strip()]
+    return to_value(text)
 
 
 def parse_csv(admin: ModelAdmin, raw: bytes) -> list[tuple[int, list[str]]]:

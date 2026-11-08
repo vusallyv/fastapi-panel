@@ -6,11 +6,13 @@ import os
 import sys
 from typing import Any
 
+from sqlalchemy import delete
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from .auth import ModelAuth
 from .introspect import coerce_to_column
+from .log import TwoFactorDevice
 from .security import hash_password
 from .site import MIN_PASSWORD_LENGTH, AdminSite, site
 
@@ -48,11 +50,11 @@ async def on_database(panel: AdminSite, fn: Any) -> Any:
             await bind.dispose()
 
 
-def mounted_site(args: argparse.Namespace) -> AdminSite:
+def mounted_site(args: argparse.Namespace, *, needs_model_auth: bool = True) -> AdminSite:
     panel = find_site(args.target)
     if not hasattr(panel, "db"):
         raise SystemExit(f"{args.target} doesn't call site.mount(), so there's no database to use.")
-    if not isinstance(panel.auth, ModelAuth):
+    if needs_model_auth and not isinstance(panel.auth, ModelAuth):
         raise SystemExit(f"{args.command} only works with ModelAuth. Other backends keep their users elsewhere.")
     return panel
 
@@ -113,6 +115,32 @@ def create_user(args: argparse.Namespace) -> int:
     return 0
 
 
+def reset_two_factor(args: argparse.Namespace) -> int:
+    # Any backend works: devices are keyed by the backend's user id, not stored on the user.
+    panel = mounted_site(args, needs_model_auth=False)
+    username = args.username or input("Username: ").strip()
+
+    def reset(session: Any) -> bool | None:
+        user = panel.auth.find_user(session, username)
+        if user is None:
+            return None
+        result = session.execute(delete(TwoFactorDevice).where(TwoFactorDevice.user_id == panel.auth.user_id(user)))
+        session.commit()
+        return result.rowcount > 0
+
+    try:
+        removed = asyncio.run(on_database(panel, reset))
+    except DBAPIError as exc:
+        raise SystemExit(f"Couldn't reset two-factor authentication: {exc.orig}") from None
+    if removed is None:
+        raise SystemExit(f"There's no user called {username}.")
+    if not removed:
+        print(f"{username} has no two-factor authentication set up.")
+        return 0
+    print(f"Removed two-factor authentication for {username}. They set it up again at their next login.")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m fastapi_panel")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -124,12 +152,17 @@ def main() -> int:
     changing = commands.add_parser("changepassword", help="set a new password for a user behind ModelAuth")
     changing.add_argument("target", help="the module that mounts the panel, like main or app.main:panel")
     changing.add_argument("--username")
+    resetting = commands.add_parser("reset-2fa", help="remove a user's authenticator, for a lost phone")
+    resetting.add_argument("target", help="the module that mounts the panel, like main or app.main:panel")
+    resetting.add_argument("--username")
     args = parser.parse_args()
 
     if args.command == "createuser":
         return create_user(args)
     if args.command == "changepassword":
         return change_password(args)
+    if args.command == "reset-2fa":
+        return reset_two_factor(args)
     print(hash_password(read_password()))
     return 0
 

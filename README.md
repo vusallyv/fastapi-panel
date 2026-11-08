@@ -60,12 +60,13 @@ Want to try it first? The [example shop](https://github.com/zaman-labs/fastapi-p
 | | |
 |---|---|
 | **Change lists** | Columns, computed columns, sorting, search across relations, sidebar filters, saved filters, date drill-down, pagination, editing in the list |
-| **Forms** | Built from your models, with fieldsets, read-only fields, prefilled slugs, validation hooks, Pydantic schemas, a rich text editor, foreign key autocomplete, many-to-many pickers, and a **+** button to create a related record on the spot |
+| **Forms** | Warn before leaving with unsaved changes. Built from your models, with fieldsets, read-only fields, prefilled slugs, validation hooks, Pydantic schemas, a rich text editor, foreign key autocomplete, many-to-many pickers, and a **+** button to create a related record on the spot |
 | **Files and images** | Uploads with previews and thumbnails, stored on disk or anywhere else through a small storage class |
 | **Import and restore** | CSV import with a preview before anything is saved, and a Deleted page to restore soft-deleted records |
 | **Inlines** | Tabular and stacked, with add, edit and delete on the parent's page |
 | **Actions** | Your own bulk actions and buttons on a single record, plus delete with a tree of what cascades and what blocks it, CSV export and "select all across pages" |
-| **Accounts and permissions** | Staff groups with a permissions grid, per model and per action, row-level through `get_queryset` and `has_*_permission`, with password reset by email |
+| **Accounts and permissions** | Staff groups with a permissions grid, per model and per action, row-level through `get_queryset` and `has_*_permission`, password reset by email, and optional two-factor login with an authenticator app |
+| **Dashboard** | Your own stat cards, such as orders to ship or low stock, each linking to a filtered list |
 | **Live settings** | Values people change in the panel with no deploy, such as a banner or a shipping threshold |
 | **Audit log** | Who changed which fields and when, on each record's history and a site-wide Activity page, with old and new values for the fields you choose |
 | **Any SQLAlchemy setup** | Sync and async engines, SQLModel, composite primary keys |
@@ -74,16 +75,11 @@ Want to try it first? The [example shop](https://github.com/zaman-labs/fastapi-p
 
 <table>
   <tr>
-    <td><img alt="An order with its items edited inline" src="https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/order-inline.png"></td>
-    <td><img alt="A product form with fieldsets and a many-to-many picker" src="https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/product-form.png"></td>
+    <td width="68%"><img alt="The dashboard with stat cards, every model and recent actions" src="https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/dashboard.png"></td>
+    <td width="32%"><img alt="Setting up two-factor login by scanning a QR code" src="https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/two-factor.png"></td>
   </tr>
   <tr>
-    <td><img alt="The dashboard with recent actions" src="https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/dashboard.png"></td>
-    <td><img alt="The product list in dark mode" src="https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/changelist-dark.png"></td>
-  </tr>
-  <tr>
-    <td><img alt="Adding a category in a dialog from the product form" src="https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/related-popup.png"></td>
-    <td><img alt="A CSV import preview before anything is saved" src="https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/import-preview.png"></td>
+    <td colspan="2"><img alt="An order with its items edited inline, with search boxes and a + button for related records" src="https://raw.githubusercontent.com/zaman-labs/fastapi-panel/main/docs/screenshots/order-inline.png"></td>
   </tr>
 </table>
 

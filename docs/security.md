@@ -42,7 +42,7 @@ An admin panel can reach all your data, so its defaults are strict and don't dep
 
 **Keep `secret_key` secret.** With it, anyone can forge a session. Load it from the environment, use a different one per environment, and rotate it if it might have leaked. Rotating logs everybody out.
 
-**Consider limiting who can reach it.** Serve the panel on a VPN or restrict it by IP if you can. There's no built-in two-factor login yet, so a reverse proxy with SSO in front is the best way to add one today.
+**Turn on two-factor login.** `mount(..., two_factor=True)` asks for an authenticator code after the password, see [Two-factor authentication](auth-and-permissions.md#two-factor-authentication). Serving the panel on a VPN or restricting it by IP helps too.
 
 **Sanitize rich text on your own pages.** The panel sanitizes `RichTextField` when it saves and displays it, but your site prints the column itself. Use `sanitize_html`, because rows can be written without going through the panel.
 
@@ -56,6 +56,7 @@ An admin panel can reach all your data, so its defaults are strict and don't dep
 - Sessions are stored in the cookie, so a single session can't be revoked from the server. See [Sessions](auth-and-permissions.md#sessions).
 - A file link works for any logged-in user who has it until it expires, even if that user can't see the record. Links are only given to people who can.
 - `FileField` doesn't look inside non-image files, so don't treat downloads as safe to open. Scan them yourself if strangers can upload.
+- Authenticator secrets are stored unencrypted in `fastapi_panel_two_factor`, as with most TOTP setups. Anyone who can read that table can generate codes, though they still need the password.
 - Audit entries are only written for changes made through the panel, not for direct database changes.
 
 ## Reporting a vulnerability

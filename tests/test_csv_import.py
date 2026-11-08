@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 
 import pytest
-from conftest import SECRET, Item, ItemAdmin, Panel, Status, User
+from conftest import SECRET, Item, ItemAdmin, Owner, OwnerAdmin, Panel, Status, Tag, TagAdmin, User
 from fastapi import FastAPI
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -76,6 +76,40 @@ def test_confirm_imports_and_maps_labels_back_to_values(importer, engine):
         assert {tag.name for tag in item.tags} == {"red", "blue"}
         entry = session.scalars(select(AdminLog).order_by(AdminLog.id.desc())).first()
         assert entry.action == "add" and entry.message == "Imported from CSV"
+
+
+class SearchingImportAdmin(ImportingAdmin):
+    autocomplete_fields = ("owner", "tags")
+
+
+@pytest.fixture
+def searching_importer(engine):
+    site = AdminSite()
+    site.register(Item, SearchingImportAdmin)
+    site.register(Owner, OwnerAdmin)
+    site.register(Tag, TagAdmin)
+    app = FastAPI()
+    auth = ModelAuth(User, superuser_field="is_superuser", permissions_field="permissions")
+    site.mount(app, engine=engine, auth=auth, secret_key=SECRET)
+    panel = Panel(TestClient(app), engine)
+    panel.login()
+    return panel
+
+
+def test_names_are_found_for_search_box_fields(searching_importer, engine):
+    assert confirm(searching_importer, GOOD).status_code == 303
+    with Session(engine) as session:
+        item = session.scalars(select(Item).where(Item.name == "fresh")).one()
+        assert item.owner.name == "Alice"
+        assert {tag.name for tag in item.tags} == {"red", "blue"}
+
+
+def test_unknown_or_ambiguous_names_are_errors_for_search_box_fields(searching_importer, engine):
+    with Session(engine) as session:
+        session.add(Owner(name="Bob"))
+        session.commit()
+    page = upload(searching_importer, "Name,Owner\nfirst,Nobody\nsecond,Bob\n")
+    assert page.text.count("Select a valid choice") == 2
 
 
 def test_false_words_turn_a_boolean_off(importer, engine):

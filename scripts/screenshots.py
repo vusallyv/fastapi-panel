@@ -127,8 +127,8 @@ def main() -> int:
         shot("related-popup")
         dialog.locator("button[name=_save]").click()
         page.wait_for_selector("dialog", state="detached")
-        chosen = page.locator("#id_category option:checked").inner_text()
-        assert chosen == "Lighting", chosen
+        chosen = page.locator("[data-autocomplete][data-name=category] .chip").inner_text()
+        assert "Lighting" in chosen, chosen
 
         page.locator("details.fieldset summary").click()
         page.locator("[data-related-add*='/tag/add']").click()
@@ -271,7 +271,7 @@ def main() -> int:
         page.reload()
         assert not is_open(), "a collapsed group should stay collapsed"
         page.fill("[data-nav-filter]", "staff")
-        assert is_open() and page.locator("[data-nav-item]:visible").count() == 1, "the filter should reveal matches"
+        assert is_open() and access.locator("[data-nav-item]:visible").count() == 1, "the filter should reveal matches"
         page.fill("[data-nav-filter]", "")
         assert not is_open(), "clearing the filter should restore the group"
         page.goto(f"{BASE}/staff")
